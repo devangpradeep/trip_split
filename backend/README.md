@@ -1,24 +1,60 @@
-# README
+# TripSplit Backend (Rails API)
 
-This README would normally document whatever steps are necessary to get the
-application up and running.
+Rails 7 API backend for TripSplit, providing authentication and expense-splitting endpoints.
 
-Things you may want to cover:
+## Requirements
+- Ruby `3.2.0`
+- Bundler
+- PostgreSQL
 
-* Ruby version
+## Setup
 
-* System dependencies
+```bash
+bundle install
+bin/rails db:prepare
+```
 
-* Configuration
+Run the server:
 
-* Database creation
+```bash
+bin/rails server
+```
 
-* Database initialization
+Backend runs on `http://localhost:3000` by default.
 
-* How to run the test suite
+## Environment Variables
 
-* Services (job queues, cache servers, search engines, etc.)
+Database (`config/database.yml`):
+- `DB_USERNAME` (default: `postgres`)
+- `DB_PASSWORD` (default: `postgres`)
+- `DB_HOST` (default: `localhost`)
 
-* Deployment instructions
+JWT/Auth (`config/initializers/devise.rb`):
+- `DEVISE_JWT_SECRET_KEY` (set this in real environments)
+- `DEVISE_JWT_EXPIRATION_HOURS` (default: `24`)
 
-* ...
+## Authentication
+
+Uses Devise + JWT.
+
+Auth endpoints:
+- `POST /users` (register)
+- `POST /users/sign_in` (login)
+- `DELETE /users/sign_out` (logout)
+
+For protected routes, send:
+- `Authorization: Bearer <jwt_token>`
+
+## API Routes
+
+Versioned API routes are under `/api/v1`.
+
+Main resources:
+- `groups`
+- nested `expenses`
+- nested `settlements`
+- `GET /api/v1/groups/:group_id/balances`
+
+## Dev Notes
+- CORS currently allows all origins in `config/initializers/cors.rb`.
+- Current app is API-only with Devise configured for JSON auth flows.

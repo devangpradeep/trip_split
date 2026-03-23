@@ -1,16 +1,52 @@
-# React + Vite
+# TripSplit Frontend (React + Vite)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+React frontend for TripSplit.
 
-Currently, two official plugins are available:
+## Requirements
+- Node.js `18+`
+- npm
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Setup
 
-## React Compiler
+```bash
+npm install
+```
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Run development server:
 
-## Expanding the ESLint configuration
+```bash
+npm run dev
+```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+Frontend runs on `http://localhost:5173` by default.
+
+## Build
+
+```bash
+npm run build
+npm run preview
+```
+
+## Backend Dependency
+
+This app expects backend API at `http://localhost:3000`.
+
+Current API URLs are set in `src/lib/api.js`:
+- Base API: `http://localhost:3000/api/v1`
+- Auth endpoints: `http://localhost:3000/users/...`
+
+If backend host/port changes, update `src/lib/api.js`.
+
+## Auth Behavior
+
+- JWT token is stored in `localStorage` as `token`.
+- User profile is stored as `user`.
+- Axios request interceptor attaches `Authorization: Bearer <token>`.
+- On `401`, token and user are cleared.
+
+## Scripts
+
+- `npm run dev` start dev server
+- `npm run build` create production build
+- `npm run preview` preview production build locally
+- `npm run lint` run ESLint
