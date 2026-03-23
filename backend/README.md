@@ -1,6 +1,6 @@
 # TripSplit Backend (Rails API)
 
-Rails 7 API backend for TripSplit, providing authentication and expense-splitting endpoints.
+Rails 8 API backend for TripSplit, providing authentication and expense-splitting endpoints.
 
 ## Requirements
 - Ruby `3.2.0`

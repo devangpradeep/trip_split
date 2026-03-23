@@ -1,11 +1,11 @@
 # TripSplit
 
 TripSplit is a split-expense app with:
-- `backend/`: Rails 7 API (JWT auth with Devise)
+- `backend/`: Rails 8 API (JWT auth with Devise)
 - `frontend/`: React + Vite UI
 
 ## Tech Stack
-- Backend: Ruby 3.2, Rails 7, PostgreSQL, Devise JWT
+- Backend: Ruby 3.2, Rails 8.1, PostgreSQL, Devise JWT
 - Frontend: React 19, Vite 8, Axios, React Router
 
 ## Project Structure
