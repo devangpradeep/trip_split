@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import api from '../lib/api';
+import api, { groupMembersApi } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
-import { ArrowLeft, Plus, Receipt, UserPlus, CreditCard, CheckCircle } from 'lucide-react';
+import { ArrowLeft, Plus, Receipt, UserPlus } from 'lucide-react';
 
 const GroupDetails = () => {
   const { id } = useParams();
@@ -14,6 +14,10 @@ const GroupDetails = () => {
   const [loading, setLoading] = useState(true);
   
   const [showAddExpense, setShowAddExpense] = useState(false);
+  const [showAddMember, setShowAddMember] = useState(false);
+  const [memberEmail, setMemberEmail] = useState('');
+  const [addingMember, setAddingMember] = useState(false);
+  const [addMemberError, setAddMemberError] = useState('');
   const [expenseForm, setExpenseForm] = useState({
     description: '',
     amount: '',
@@ -74,6 +78,30 @@ const GroupDetails = () => {
     }
   };
 
+  const openAddMemberModal = () => {
+    setAddMemberError('');
+    setMemberEmail('');
+    setShowAddMember(true);
+  };
+
+  const handleAddMember = async (e) => {
+    e.preventDefault();
+    if (!memberEmail.trim()) return;
+
+    try {
+      setAddingMember(true);
+      setAddMemberError('');
+      await groupMembersApi.add(id, memberEmail.trim());
+      setShowAddMember(false);
+      setMemberEmail('');
+      fetchGroupData();
+    } catch (error) {
+      setAddMemberError(error.response?.data?.error || error.response?.data?.errors?.join(', ') || 'Failed to add member');
+    } finally {
+      setAddingMember(false);
+    }
+  };
+
   const renderBalanceCard = (balanceData) => {
     const isCurrentUser = balanceData.user.id === user.id;
     const amount = balanceData.balance;
@@ -117,6 +145,7 @@ const GroupDetails = () => {
   if (!group) return <div className="container text-center pt-20">Group not found</div>;
 
   const currencySym = group.currency === 'INR' ? '₹' : (group.currency === 'USD' ? '$' : '€');
+  const canManageMembers = group.created_by_id === user.id;
 
   return (
     <div className="container flex-col gap-6" style={{ paddingBottom: '5rem' }}>
@@ -241,7 +270,13 @@ const GroupDetails = () => {
           <div>
             <h2 className="text-xl font-bold flex justify-between items-center" style={{ marginBottom: '1rem' }}>
               Members ({group.members.length})
-              <button className="btn btn-secondary" style={{ padding: '0.4rem 0.6rem', border: 'none', background: 'transparent', color: 'var(--primary-color)' }}>
+              <button
+                className="btn btn-secondary"
+                onClick={openAddMemberModal}
+                disabled={!canManageMembers}
+                title={canManageMembers ? 'Add member' : 'Only group admin can add members'}
+                style={{ padding: '0.4rem 0.6rem', border: 'none', background: 'transparent', color: 'var(--primary-color)', opacity: canManageMembers ? 1 : 0.4, cursor: canManageMembers ? 'pointer' : 'not-allowed' }}
+              >
                 <UserPlus size={18} />
               </button>
             </h2>
@@ -258,6 +293,41 @@ const GroupDetails = () => {
           </div>
         </div>
       </div>
+
+      {showAddMember && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
+          <div className="glass-panel animate-fade-in" style={{ width: '100%', maxWidth: 460 }}>
+            <h3 style={{ marginBottom: '1rem' }}>Add Member</h3>
+            <form onSubmit={handleAddMember} className="flex flex-col gap-3">
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label>Email</label>
+                <input
+                  required
+                  type="email"
+                  placeholder="friend@example.com"
+                  value={memberEmail}
+                  onChange={(e) => setMemberEmail(e.target.value)}
+                  autoFocus
+                />
+              </div>
+              {addMemberError && <div className="error-text" style={{ margin: 0 }}>{addMemberError}</div>}
+              <div className="flex gap-3" style={{ marginTop: '0.5rem' }}>
+                <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={addingMember}>
+                  {addingMember ? 'Adding...' : 'Add Member'}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setShowAddMember(false)}
+                  disabled={addingMember}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
       
       {/* Styles for dynamic text colors */}
       <style>{`

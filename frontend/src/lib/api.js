@@ -43,4 +43,10 @@ export const authApi = {
   })
 };
 
+export const groupMembersApi = {
+  add: (groupId, email) => api.post(`/groups/${groupId}/members`, {
+    member: { email }
+  })
+};
+
 export default api;
