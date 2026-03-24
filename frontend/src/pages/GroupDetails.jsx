@@ -1,8 +1,199 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api, { groupMembersApi } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
-import { ArrowLeft, Plus, Receipt, UserPlus, Pencil, Trash2 } from 'lucide-react';
+import { ArrowLeft, Plus, Receipt, UserPlus, Pencil, Trash2, CalendarDays } from 'lucide-react';
+
+const todayISO = () => new Date().toISOString().split('T')[0];
+
+const isValidISODate = (value) => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || '');
+  if (!match) return false;
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+
+  return (
+    date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day
+  );
+};
+
+const formatISODateForUI = (isoDate) => {
+  if (!isValidISODate(isoDate)) return '';
+  const [year, month, day] = isoDate.split('-');
+  return `${day}/${month}/${year}`;
+};
+
+const parseUIDateToISO = (displayDate) => {
+  const normalized = (displayDate || '').trim();
+  const match = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(normalized);
+  if (!match) return null;
+
+  const day = match[1].padStart(2, '0');
+  const month = match[2].padStart(2, '0');
+  const year = match[3];
+  const isoDate = `${year}-${month}-${day}`;
+
+  return isValidISODate(isoDate) ? isoDate : null;
+};
+
+const buildDefaultExpenseForm = (members = []) => ({
+  description: '',
+  amount: '',
+  date: todayISO(),
+  split_type: 'equal',
+  splits: members.map((member) => ({
+    user_id: member.id,
+    name: member.name,
+    included: true,
+    amount: '',
+    percentage: ''
+  }))
+});
+
+const CustomSelect = ({ value, options, onChange, disabled = false }) => {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef(null);
+  const selectedOption = options.find((option) => option.value === value);
+
+  useEffect(() => {
+    const handleDocumentClick = (event) => {
+      if (!rootRef.current?.contains(event.target)) {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleDocumentClick);
+    return () => document.removeEventListener('mousedown', handleDocumentClick);
+  }, []);
+
+  useEffect(() => {
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, []);
+
+  return (
+    <div ref={rootRef} className={`custom-select ${open ? 'open' : ''}`}>
+      <button
+        type="button"
+        className="custom-select-trigger"
+        onClick={() => {
+          if (disabled) return;
+          setOpen((prev) => !prev);
+        }}
+        disabled={disabled}
+      >
+        <span>{selectedOption?.label || 'Select'}</span>
+        <span className="custom-select-caret">▾</span>
+      </button>
+      {open && (
+        <div className="custom-select-menu">
+          {options.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              className={`custom-select-option ${option.value === value ? 'active' : ''}`}
+              onClick={() => {
+                onChange(option.value);
+                setOpen(false);
+              }}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const CustomDateInput = ({ value, onChange, required = false, disabled = false }) => {
+  const [displayValue, setDisplayValue] = useState(formatISODateForUI(value));
+  const proxyDateInputRef = useRef(null);
+
+  useEffect(() => {
+    setDisplayValue(formatISODateForUI(value));
+  }, [value]);
+
+  const commitValue = () => {
+    const parsedDate = parseUIDateToISO(displayValue);
+    if (parsedDate) {
+      onChange(parsedDate);
+      setDisplayValue(formatISODateForUI(parsedDate));
+      return;
+    }
+
+    setDisplayValue(formatISODateForUI(value));
+  };
+
+  const openDatePicker = () => {
+    if (disabled) return;
+
+    if (typeof proxyDateInputRef.current?.showPicker === 'function') {
+      proxyDateInputRef.current.showPicker();
+      return;
+    }
+
+    proxyDateInputRef.current?.focus();
+    proxyDateInputRef.current?.click();
+  };
+
+  return (
+    <div className="custom-date-input">
+      <input
+        type="text"
+        className="custom-date-text-input"
+        inputMode="numeric"
+        placeholder="DD/MM/YYYY"
+        value={displayValue}
+        onChange={(e) => setDisplayValue(e.target.value)}
+        onBlur={commitValue}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            commitValue();
+          }
+        }}
+        required={required}
+        disabled={disabled}
+        maxLength={10}
+        autoComplete="off"
+      />
+      <button
+        type="button"
+        className="custom-date-picker-btn"
+        onClick={openDatePicker}
+        disabled={disabled}
+        aria-label="Open calendar"
+      >
+        <CalendarDays size={16} />
+      </button>
+      <input
+        ref={proxyDateInputRef}
+        type="date"
+        className="custom-date-native-proxy"
+        value={value || ''}
+        onChange={(e) => {
+          const nextValue = e.target.value;
+          if (!nextValue) return;
+          onChange(nextValue);
+          setDisplayValue(formatISODateForUI(nextValue));
+        }}
+        tabIndex={-1}
+        aria-hidden="true"
+      />
+    </div>
+  );
+};
 
 const GroupDetails = () => {
   const { id } = useParams();
@@ -29,6 +220,16 @@ const GroupDetails = () => {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [pendingDeleteExpense, setPendingDeleteExpense] = useState(null);
   const [deleteExpenseError, setDeleteExpenseError] = useState('');
+  const [addExpenseError, setAddExpenseError] = useState('');
+  const [showSettleModal, setShowSettleModal] = useState(false);
+  const [settlingPayment, setSettlingPayment] = useState(false);
+  const [settleError, setSettleError] = useState('');
+  const [settleForm, setSettleForm] = useState({
+    to_user_id: '',
+    amount: '',
+    date: new Date().toISOString().split('T')[0],
+    note: ''
+  });
   const [editExpenseError, setEditExpenseError] = useState('');
   const [editExpenseForm, setEditExpenseForm] = useState({
     description: '',
@@ -38,11 +239,7 @@ const GroupDetails = () => {
     paid_by_id: '',
     splits: []
   });
-  const [expenseForm, setExpenseForm] = useState({
-    description: '',
-    amount: '',
-    date: new Date().toISOString().split('T')[0]
-  });
+  const [expenseForm, setExpenseForm] = useState(() => buildDefaultExpenseForm());
 
   useEffect(() => {
     fetchGroupData();
@@ -51,6 +248,22 @@ const GroupDetails = () => {
   useEffect(() => {
     localStorage.setItem('tripsplit_expense_view_mode', expenseViewMode);
   }, [expenseViewMode]);
+
+  useEffect(() => {
+    if (!showAddExpense || !group) return;
+
+    setExpenseForm((prev) => {
+      const prevSplitsByUserId = new Map(prev.splits.map((split) => [split.user_id, split]));
+      const nextSplits = group.members.map((member) => {
+        const existing = prevSplitsByUserId.get(member.id);
+        return existing
+          ? { ...existing, name: member.name }
+          : { user_id: member.id, name: member.name, included: true, amount: '', percentage: '' };
+      });
+
+      return { ...prev, splits: nextSplits };
+    });
+  }, [group, showAddExpense]);
 
   const fetchGroupData = async () => {
     try {
@@ -73,33 +286,149 @@ const GroupDetails = () => {
   const handleAddExpense = async (e) => {
     e.preventDefault();
     if (!expenseForm.amount || !expenseForm.description) return;
+    if (!isValidISODate(expenseForm.date)) {
+      setAddExpenseError('Please enter a valid date in DD/MM/YYYY format');
+      return;
+    }
 
-    // For MVP, split equally among all members
-    const membersCount = group.members.length;
-    const splitAmount = (parseFloat(expenseForm.amount) / membersCount).toFixed(2);
-    
-    const splits = group.members.map(m => ({
-      user_id: m.id,
-      amount: splitAmount
-    }));
+    const totalAmount = parseFloat(expenseForm.amount || 0);
+    if (!(totalAmount > 0)) {
+      setAddExpenseError('Expense amount must be greater than zero');
+      return;
+    }
+
+    const includedSplits = expenseForm.splits.filter((split) => split.included);
+    if (includedSplits.length === 0) {
+      setAddExpenseError('Select at least one participant for the split');
+      return;
+    }
+
+    let splitsPayload = includedSplits.map((split) => ({ user_id: split.user_id }));
+
+    if (expenseForm.split_type === 'amount') {
+      const enteredAmountTotal = includedSplits.reduce((sum, split) => sum + (parseFloat(split.amount) || 0), 0);
+      if (Math.abs(enteredAmountTotal - totalAmount) > 0.01) {
+        setAddExpenseError('Split amounts must add up to the total expense amount');
+        return;
+      }
+
+      splitsPayload = includedSplits.map((split) => ({
+        user_id: split.user_id,
+        amount: split.amount
+      }));
+    }
+
+    if (expenseForm.split_type === 'percentage') {
+      const enteredPercentageTotal = includedSplits.reduce((sum, split) => sum + (parseFloat(split.percentage) || 0), 0);
+      if (Math.abs(enteredPercentageTotal - 100) > 0.01) {
+        setAddExpenseError('Split percentages must add up to 100');
+        return;
+      }
+
+      splitsPayload = includedSplits.map((split) => ({
+        user_id: split.user_id,
+        percentage: split.percentage
+      }));
+    }
 
     try {
+      setAddExpenseError('');
       await api.post(`/groups/${id}/expenses`, {
         expense: {
-          ...expenseForm,
+          description: expenseForm.description,
+          amount: expenseForm.amount,
+          date: expenseForm.date,
           currency: group.currency,
-          split_type: 'equal',
-          splits
+          split_type: expenseForm.split_type,
+          splits: splitsPayload
         }
       });
       
       setShowAddExpense(false);
-      setExpenseForm({ description: '', amount: '', date: new Date().toISOString().split('T')[0] });
+      setExpenseForm(buildDefaultExpenseForm(group.members));
       fetchGroupData(); // Refresh all data
     } catch (error) {
-      console.error('Failed to add expense', error);
-      alert('Failed to add expense. Check console.');
+      const serverError = error.response?.data?.errors?.join(', ');
+      const fallbackError = error.response?.data?.error;
+      setAddExpenseError(serverError || fallbackError || 'Failed to add expense');
     }
+  };
+
+  const updateAddSplit = (userId, field, value) => {
+    setExpenseForm((prev) => ({
+      ...prev,
+      splits: prev.splits.map((split) =>
+        split.user_id === userId ? { ...split, [field]: value } : split
+      )
+    }));
+  };
+
+  const toggleAddSplitParticipant = (userId, included) => {
+    setExpenseForm((prev) => ({
+      ...prev,
+      splits: prev.splits.map((split) =>
+        split.user_id === userId ? { ...split, included } : split
+      )
+    }));
+  };
+
+  const rebalanceAddSplitOnBlur = (editedUserId) => {
+    setExpenseForm((prev) => {
+      if (prev.split_type === 'equal') return prev;
+
+      const includedSplits = prev.splits.filter((split) => split.included);
+      if (includedSplits.length < 2) return prev;
+
+      const preferredAutoSplit = includedSplits.find(
+        (split) => split.user_id === user.id && split.user_id !== editedUserId
+      );
+      const fallbackAutoSplit = includedSplits.find(
+        (split) => split.user_id !== editedUserId
+      );
+      const autoSplit = preferredAutoSplit || fallbackAutoSplit;
+      if (!autoSplit) return prev;
+
+      const targetTotal =
+        prev.split_type === 'percentage'
+          ? 100
+          : (parseFloat(prev.amount) || 0);
+
+      const sumExcludingAuto = includedSplits.reduce((sum, split) => {
+        if (split.user_id === autoSplit.user_id) return sum;
+        const value = prev.split_type === 'percentage'
+          ? (parseFloat(split.percentage) || 0)
+          : (parseFloat(split.amount) || 0);
+        return sum + value;
+      }, 0);
+
+      const rawRemaining = targetTotal - sumExcludingAuto;
+      const remaining = Math.max(0, rawRemaining);
+
+      return {
+        ...prev,
+        splits: prev.splits.map((split) => {
+          if (split.user_id !== autoSplit.user_id) return split;
+
+          if (prev.split_type === 'percentage') {
+            return { ...split, percentage: remaining.toFixed(2) };
+          }
+
+          return { ...split, amount: remaining.toFixed(2) };
+        })
+      };
+    });
+  };
+
+  const toggleAddExpensePanel = () => {
+    if (showAddExpense) {
+      setShowAddExpense(false);
+      setAddExpenseError('');
+      return;
+    }
+
+    setAddExpenseError('');
+    setExpenseForm(buildDefaultExpenseForm(group?.members || []));
+    setShowAddExpense(true);
   };
 
   const openAddMemberModal = () => {
@@ -228,6 +557,10 @@ const GroupDetails = () => {
   const handleUpdateExpense = async (e) => {
     e.preventDefault();
     if (!editingExpenseId) return;
+    if (!isValidISODate(editExpenseForm.date)) {
+      setEditExpenseError('Please enter a valid date in DD/MM/YYYY format');
+      return;
+    }
 
     const includedSplits = editExpenseForm.splits.filter((split) => split.included);
     if (includedSplits.length === 0) {
@@ -335,7 +668,15 @@ const GroupDetails = () => {
           </div>
         </div>
         {amount < -0.01 && isCurrentUser && (
-          <button className="btn btn-secondary" style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}>Settle</button>
+          <button
+            className="btn btn-secondary"
+            style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
+            onClick={openSettleModal}
+            disabled={settlementCandidates.length === 0}
+            title={settlementCandidates.length === 0 ? 'No members are currently owed money' : 'Settle up'}
+          >
+            Settle
+          </button>
         )}
       </div>
     );
@@ -358,6 +699,119 @@ const GroupDetails = () => {
     ...group.members.filter((member) => member.id !== user.id),
     ...group.members.filter((member) => member.id === user.id)
   ];
+  const currentUserBalanceEntry = balances.find((entry) => entry.user.id === user.id);
+  const currentUserDebt = Math.max(0, -(parseFloat(currentUserBalanceEntry?.balance || 0)));
+  const settlementCandidates = balances
+    .filter((entry) => entry.user.id !== user.id && parseFloat(entry.balance || 0) > 0.01)
+    .sort((a, b) => parseFloat(b.balance || 0) - parseFloat(a.balance || 0));
+
+  const maxPayableToUser = (recipientId) => {
+    const recipient = settlementCandidates.find((entry) => entry.user.id === recipientId);
+    if (!recipient) return 0;
+
+    const recipientOwed = Math.max(0, parseFloat(recipient.balance || 0));
+    return Math.max(0, Math.min(currentUserDebt, recipientOwed));
+  };
+
+  const openSettleModal = () => {
+    if (currentUserDebt <= 0 || settlementCandidates.length === 0) return;
+
+    const defaultRecipientId = settlementCandidates[0].user.id;
+    const defaultMax = maxPayableToUser(defaultRecipientId);
+
+    setSettleError('');
+    setSettleForm({
+      to_user_id: defaultRecipientId,
+      amount: defaultMax > 0 ? defaultMax.toFixed(2) : '',
+      date: new Date().toISOString().split('T')[0],
+      note: ''
+    });
+    setShowSettleModal(true);
+  };
+
+  const updateSettleRecipient = (recipientId) => {
+    const nextMax = maxPayableToUser(recipientId);
+
+    setSettleForm((prev) => {
+      const currentAmount = parseFloat(prev.amount || 0);
+      const nextAmount =
+        currentAmount > 0 && currentAmount <= nextMax
+          ? currentAmount.toFixed(2)
+          : (nextMax > 0 ? nextMax.toFixed(2) : '');
+
+      return { ...prev, to_user_id: recipientId, amount: nextAmount };
+    });
+  };
+
+  const handleSettlePayment = async (e) => {
+    e.preventDefault();
+    const recipientId = settleForm.to_user_id;
+    const amount = parseFloat(settleForm.amount || 0);
+    const maxAmount = maxPayableToUser(recipientId);
+
+    if (!recipientId) {
+      setSettleError('Please choose a member to settle with');
+      return;
+    }
+
+    if (!(amount > 0)) {
+      setSettleError('Settlement amount must be greater than zero');
+      return;
+    }
+
+    if (amount > maxAmount + 0.001) {
+      setSettleError(`Amount cannot exceed ${currencySym}${maxAmount.toFixed(2)}`);
+      return;
+    }
+    if (!isValidISODate(settleForm.date)) {
+      setSettleError('Please enter a valid date in DD/MM/YYYY format');
+      return;
+    }
+
+    try {
+      setSettlingPayment(true);
+      setSettleError('');
+      await api.post(`/groups/${id}/settlements`, {
+        settlement: {
+          to_user_id: recipientId,
+          amount: amount.toFixed(2),
+          date: settleForm.date,
+          note: settleForm.note
+        }
+      });
+
+      setShowSettleModal(false);
+      fetchGroupData();
+    } catch (error) {
+      const serverErrors = error.response?.data?.errors;
+      setSettleError(
+        Array.isArray(serverErrors) ? serverErrors.join(', ') : (error.response?.data?.error || 'Failed to record settlement')
+      );
+    } finally {
+      setSettlingPayment(false);
+    }
+  };
+
+  const settleRecipientMaxAmount = settleForm.to_user_id ? maxPayableToUser(settleForm.to_user_id) : 0;
+  const splitTypeOptions = [
+    { value: 'equal', label: 'Equal' },
+    { value: 'amount', label: 'Amount' },
+    { value: 'percentage', label: 'Percentage' }
+  ];
+  const settlementRecipientOptions = settlementCandidates.map((entry) => ({
+    value: entry.user.id,
+    label: `${entry.user.name} (owed ${currencySym}${Math.max(0, parseFloat(entry.balance || 0)).toFixed(2)})`
+  }));
+  const includedAddSplits = expenseForm.splits.filter((split) => split.included);
+  const addEnteredSplitTotal = includedAddSplits.reduce((sum, split) => {
+    if (expenseForm.split_type === 'percentage') {
+      return sum + (parseFloat(split.percentage) || 0);
+    }
+    if (expenseForm.split_type === 'amount') {
+      return sum + (parseFloat(split.amount) || 0);
+    }
+    return sum;
+  }, 0);
   const enteredSplitTotal = includedEditSplits.reduce((sum, split) => {
     if (editExpenseForm.split_type === 'percentage') {
       return sum + (parseFloat(split.percentage) || 0);
@@ -403,7 +857,7 @@ const GroupDetails = () => {
                   Compact
                 </button>
               </div>
-              <button className="btn btn-primary" onClick={() => setShowAddExpense(!showAddExpense)}>
+              <button className="btn btn-primary" onClick={toggleAddExpensePanel}>
                 <Plus size={18} /> Add Expense
               </button>
             </div>
@@ -415,24 +869,105 @@ const GroupDetails = () => {
               <form onSubmit={handleAddExpense} className="flex flex-col gap-3">
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label>Description</label>
-                  <input required placeholder="e.g. Dinner at Cafe" value={expenseForm.description} onChange={e => setExpenseForm({...expenseForm, description: e.target.value})} />
+                  <input
+                    required
+                    placeholder="e.g. Dinner at Cafe"
+                    value={expenseForm.description}
+                    onChange={(e) => setExpenseForm((prev) => ({ ...prev, description: e.target.value }))}
+                  />
                 </div>
                 <div className="flex gap-3">
                   <div className="form-group" style={{ marginBottom: 0, flex: 1 }}>
                     <label>Amount ({group.currency})</label>
-                    <input required type="number" step="0.01" min="0.01" placeholder="0.00" value={expenseForm.amount} onChange={e => setExpenseForm({...expenseForm, amount: e.target.value})} />
+                    <input
+                      required
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      placeholder="0.00"
+                      value={expenseForm.amount}
+                      onChange={(e) => setExpenseForm((prev) => ({ ...prev, amount: e.target.value }))}
+                    />
                   </div>
                   <div className="form-group" style={{ marginBottom: 0, flex: 1 }}>
                     <label>Date</label>
-                    <input required type="date" value={expenseForm.date} onChange={e => setExpenseForm({...expenseForm, date: e.target.value})} />
+                    <CustomDateInput
+                      required
+                      value={expenseForm.date}
+                      onChange={(nextDate) => setExpenseForm((prev) => ({ ...prev, date: nextDate }))}
+                    />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0, flex: 1 }}>
+                    <label>Split Type</label>
+                    <CustomSelect
+                      value={expenseForm.split_type}
+                      options={splitTypeOptions}
+                      onChange={(nextValue) => setExpenseForm((prev) => ({ ...prev, split_type: nextValue }))}
+                    />
                   </div>
                 </div>
-                <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', padding: '0.5rem 0' }}>
-                  Amount will be split equally among all {group.members.length} members for the MVP.
+
+                <div style={{ marginTop: '0.5rem' }}>
+                  <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '0.6rem' }}>
+                    Choose participants and split values:
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    {expenseForm.splits.map((split) => (
+                      <div key={split.user_id} className="split-row">
+                        <input
+                          className="split-check"
+                          type="checkbox"
+                          checked={split.included}
+                          onChange={(e) => toggleAddSplitParticipant(split.user_id, e.target.checked)}
+                        />
+                        <span className="split-member-name">{split.user_id === user.id ? 'You' : split.name}</span>
+                        {expenseForm.split_type !== 'equal' && split.included ? (
+                          <input
+                            className="split-value-input"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={expenseForm.split_type === 'percentage' ? split.percentage : split.amount}
+                            onChange={(e) => updateAddSplit(
+                              split.user_id,
+                              expenseForm.split_type === 'percentage' ? 'percentage' : 'amount',
+                              e.target.value
+                            )}
+                            onBlur={() => rebalanceAddSplitOnBlur(split.user_id)}
+                          />
+                        ) : (
+                          <span className="split-auto-value">
+                            {expenseForm.split_type === 'equal' ? 'Auto' : '--'}
+                          </span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
                 </div>
+
+                {expenseForm.split_type !== 'equal' && (
+                  <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                    {expenseForm.split_type === 'percentage'
+                      ? `Entered percentage total: ${addEnteredSplitTotal.toFixed(2)}% (must be 100%)`
+                      : `Entered amount total: ${currencySym}${addEnteredSplitTotal.toFixed(2)} (must match expense amount)`
+                    }
+                  </div>
+                )}
+
+                {addExpenseError && <div className="error-text" style={{ margin: 0 }}>{addExpenseError}</div>}
+
                 <div className="flex gap-3" style={{ marginTop: '0.5rem' }}>
                   <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Save</button>
-                  <button type="button" className="btn btn-secondary" onClick={() => setShowAddExpense(false)}>Cancel</button>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => {
+                      setShowAddExpense(false);
+                      setAddExpenseError('');
+                    }}
+                  >
+                    Cancel
+                  </button>
                 </div>
               </form>
             </div>
@@ -581,23 +1116,19 @@ const GroupDetails = () => {
                 </div>
                 <div className="form-group" style={{ marginBottom: 0, flex: 1 }}>
                   <label>Date</label>
-                  <input
+                  <CustomDateInput
                     required
-                    type="date"
                     value={editExpenseForm.date}
-                    onChange={(e) => setEditExpenseForm((prev) => ({ ...prev, date: e.target.value }))}
+                    onChange={(nextDate) => setEditExpenseForm((prev) => ({ ...prev, date: nextDate }))}
                   />
                 </div>
                 <div className="form-group" style={{ marginBottom: 0, flex: 1 }}>
                   <label>Split Type</label>
-                  <select
+                  <CustomSelect
                     value={editExpenseForm.split_type}
-                    onChange={(e) => setEditExpenseForm((prev) => ({ ...prev, split_type: e.target.value }))}
-                  >
-                    <option value="equal">Equal</option>
-                    <option value="amount">Amount</option>
-                    <option value="percentage">Percentage</option>
-                  </select>
+                    options={splitTypeOptions}
+                    onChange={(nextValue) => setEditExpenseForm((prev) => ({ ...prev, split_type: nextValue }))}
+                  />
                 </div>
               </div>
 
@@ -740,6 +1271,83 @@ const GroupDetails = () => {
                 Cancel
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showSettleModal && (
+        <div className="modal-overlay">
+          <div className="glass-panel animate-fade-in modal-card" style={{ width: '100%', maxWidth: 500 }}>
+            <h3 style={{ marginBottom: '0.8rem' }}>Settle Up</h3>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1rem' }}>
+              Record a full or partial payment. Your current total due is <strong style={{ color: 'var(--text-primary)' }}>{currencySym}{currentUserDebt.toFixed(2)}</strong>.
+            </p>
+
+            <form onSubmit={handleSettlePayment} className="flex flex-col gap-3">
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label>Pay To</label>
+                <CustomSelect
+                  value={settleForm.to_user_id}
+                  options={settlementRecipientOptions}
+                  onChange={(nextValue) => updateSettleRecipient(nextValue)}
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label>Amount ({group.currency})</label>
+                <input
+                  required
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  value={settleForm.amount}
+                  onChange={(e) => setSettleForm((prev) => ({ ...prev, amount: e.target.value }))}
+                />
+              </div>
+
+              <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                Maximum you can settle with this member right now: {currencySym}{settleRecipientMaxAmount.toFixed(2)}
+              </div>
+
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label>Date</label>
+                <CustomDateInput
+                  required
+                  value={settleForm.date}
+                  onChange={(nextDate) => setSettleForm((prev) => ({ ...prev, date: nextDate }))}
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label>Note (Optional)</label>
+                <textarea
+                  rows={3}
+                  value={settleForm.note}
+                  onChange={(e) => setSettleForm((prev) => ({ ...prev, note: e.target.value }))}
+                  placeholder="UPI / cash / bank reference..."
+                />
+              </div>
+
+              {settleError && <div className="error-text" style={{ margin: 0 }}>{settleError}</div>}
+
+              <div className="flex gap-3" style={{ marginTop: '0.5rem' }}>
+                <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={settlingPayment}>
+                  {settlingPayment ? 'Recording...' : 'Record Settlement'}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    if (settlingPayment) return;
+                    setShowSettleModal(false);
+                    setSettleError('');
+                  }}
+                  disabled={settlingPayment}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
