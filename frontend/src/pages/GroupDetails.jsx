@@ -1,7 +1,7 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api, { groupMembersApi } from '../lib/api';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/useAuth';
 import { ArrowLeft, Plus, Receipt, UserPlus, Pencil, Trash2, CalendarDays } from 'lucide-react';
 
 const todayISO = () => new Date().toISOString().split('T')[0];
@@ -241,9 +241,27 @@ const GroupDetails = () => {
   });
   const [expenseForm, setExpenseForm] = useState(() => buildDefaultExpenseForm());
 
+  const fetchGroupData = useCallback(async () => {
+    try {
+      const [groupRes, expensesRes, balancesRes] = await Promise.all([
+        api.get(`/groups/${id}`),
+        api.get(`/groups/${id}/expenses`),
+        api.get(`/groups/${id}/balances`)
+      ]);
+      setGroup(groupRes.data.group || groupRes.data.data || groupRes.data);
+      const expensesData = expensesRes.data;
+      setExpenses(Array.isArray(expensesData) ? expensesData : (expensesData.expenses || expensesData.data || []));
+      setBalances(balancesRes.data.balances || []);
+    } catch (error) {
+      console.error('Failed to fetch group data', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [id]);
+
   useEffect(() => {
     fetchGroupData();
-  }, [id]);
+  }, [fetchGroupData]);
 
   useEffect(() => {
     localStorage.setItem('tripsplit_expense_view_mode', expenseViewMode);
@@ -264,24 +282,6 @@ const GroupDetails = () => {
       return { ...prev, splits: nextSplits };
     });
   }, [group, showAddExpense]);
-
-  const fetchGroupData = async () => {
-    try {
-      const [groupRes, expensesRes, balancesRes] = await Promise.all([
-        api.get(`/groups/${id}`),
-        api.get(`/groups/${id}/expenses`),
-        api.get(`/groups/${id}/balances`)
-      ]);
-      setGroup(groupRes.data.group || groupRes.data.data || groupRes.data);
-      const expensesData = expensesRes.data;
-      setExpenses(Array.isArray(expensesData) ? expensesData : (expensesData.expenses || expensesData.data || []));
-      setBalances(balancesRes.data.balances || []);
-    } catch (error) {
-      console.error('Failed to fetch group data', error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleAddExpense = async (e) => {
     e.preventDefault();

@@ -8,6 +8,7 @@ module Api
       before_action :authenticate_user!
       before_action :set_group
       before_action :set_settlement, only: %i[show destroy]
+      before_action :ensure_can_delete_settlement!, only: %i[destroy]
 
       def index
         @settlements = @group.settlements.includes(:from_user, :to_user).order(date: :desc)
@@ -115,6 +116,14 @@ module Api
         end
 
         balances
+      end
+
+      def ensure_can_delete_settlement!
+        return if @settlement.from_user_id == current_user.id
+        return if @group.group_memberships.exists?(user_id: current_user.id, role: 'admin')
+
+        render json: { error: 'Only group admins or the member who recorded this settlement can delete it' },
+               status: :forbidden
       end
     end
   end

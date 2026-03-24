@@ -48,7 +48,10 @@ Backend (`backend/config/database.yml`, `backend/config/initializers/devise.rb`)
 - `DB_HOST` (default: `localhost`)
 - `DEVISE_JWT_SECRET_KEY` (recommended to set in non-local envs)
 - `DEVISE_JWT_EXPIRATION_HOURS` (default: `24`)
+- `CORS_ALLOWED_ORIGINS` (comma-separated, default local dev origins only)
+- `RAILS_MASTER_KEY` (required in production)
+- `FORCE_SSL` (default: `true` in production)
 
 ## Notes
-- CORS is currently open (`origins "*"`) for development.
-- Frontend API base URL is currently hardcoded to `http://localhost:3000` in `frontend/src/lib/api.js`.
+- Health endpoint is available at `GET /up`.
+- Frontend API config is env-driven (`frontend/.env.example`).

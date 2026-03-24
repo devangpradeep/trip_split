@@ -5,6 +5,7 @@ module Api
     class GroupsController < ApplicationController
       before_action :authenticate_user!
       before_action :set_group, only: %i[show update destroy]
+      before_action :ensure_can_manage_group!, only: %i[update destroy]
 
       def index
         @groups = current_user.groups.includes(:members)
@@ -52,6 +53,13 @@ module Api
 
       def group_params
         params.require(:group).permit(:name, :description, :currency)
+      end
+
+      def ensure_can_manage_group!
+        return if @group.created_by_id == current_user.id
+        return if @group.group_memberships.exists?(user_id: current_user.id, role: 'admin')
+
+        render json: { error: 'Only group admins or the group creator can modify this group' }, status: :forbidden
       end
     end
   end

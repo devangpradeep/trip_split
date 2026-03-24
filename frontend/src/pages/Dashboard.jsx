@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../contexts/useAuth';
 import api from '../lib/api';
 import { LogOut, Plus, Users, ArrowRight, UserCircle } from 'lucide-react';
 

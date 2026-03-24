@@ -7,9 +7,22 @@
 
 # Read more: https://github.com/cyu/rack-cors
 
+default_origins = if Rails.env.production?
+                    ''
+                  else
+                    'http://localhost:5173,http://127.0.0.1:5173'
+                  end
+
+allowed_origins = ENV.fetch('CORS_ALLOWED_ORIGINS', default_origins)
+                     .split(',')
+                     .map(&:strip)
+                     .reject(&:blank?)
+
 Rails.application.config.middleware.insert_before 0, Rack::Cors do
+  next if allowed_origins.empty?
+
   allow do
-    origins '*'
+    origins(*allowed_origins)
 
     resource '*',
              headers: :any,

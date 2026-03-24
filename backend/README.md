@@ -33,6 +33,11 @@ JWT/Auth (`config/initializers/devise.rb`):
 - `DEVISE_JWT_SECRET_KEY` (set this in real environments)
 - `DEVISE_JWT_EXPIRATION_HOURS` (default: `24`)
 
+Production/security:
+- `RAILS_MASTER_KEY` (required in production)
+- `FORCE_SSL` (default: `true` in production)
+- `CORS_ALLOWED_ORIGINS` (comma-separated, for example `https://app.example.com`)
+
 ## Authentication
 
 Uses Devise + JWT.
@@ -48,6 +53,9 @@ For protected routes, send:
 ## API Routes
 
 Versioned API routes are under `/api/v1`.
+
+Health check:
+- `GET /up`
 
 Main resources:
 - `groups`

@@ -1,7 +1,13 @@
 import axios from 'axios';
 
+const DEFAULT_API_ORIGIN = 'http://localhost:3000';
+const apiOrigin = (import.meta.env.VITE_API_ORIGIN || DEFAULT_API_ORIGIN).replace(/\/+$/, '');
+const apiPrefix = import.meta.env.VITE_API_PREFIX || '/api/v1';
+const normalizedApiPrefix = apiPrefix.startsWith('/') ? apiPrefix : `/${apiPrefix}`;
+const authBaseUrl = (import.meta.env.VITE_AUTH_BASE_URL || apiOrigin).replace(/\/+$/, '');
+
 const api = axios.create({
-  baseURL: 'http://localhost:3000/api/v1',
+  baseURL: `${apiOrigin}${normalizedApiPrefix}`,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -36,9 +42,9 @@ api.interceptors.response.use(
 );
 
 export const authApi = {
-  login: (data) => axios.post('http://localhost:3000/users/sign_in', { user: data }),
-  register: (data) => axios.post('http://localhost:3000/users', { user: data }),
-  logout: () => axios.delete('http://localhost:3000/users/sign_out', {
+  login: (data) => axios.post(`${authBaseUrl}/users/sign_in`, { user: data }),
+  register: (data) => axios.post(`${authBaseUrl}/users`, { user: data }),
+  logout: () => axios.delete(`${authBaseUrl}/users/sign_out`, {
     headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
   })
 };
