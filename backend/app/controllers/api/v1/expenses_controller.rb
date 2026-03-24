@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Api
   module V1
     class ExpensesController < ApplicationController
@@ -12,8 +14,8 @@ module Api
       def index
         @expenses = @group.expenses.includes(:paid_by, expense_splits: :user).order(date: :desc)
         render json: @expenses, include: {
-          paid_by: { only: [:id, :name, :avatar_url] },
-          expense_splits: { include: { user: { only: [:id, :name, :avatar_url] } } }
+          paid_by: { only: %i[id name avatar_url] },
+          expense_splits: { include: { user: { only: %i[id name avatar_url] } } }
         }
       end
 
@@ -130,7 +132,10 @@ module Api
           end
         when 'exact'
           amount_rows = split_params.select { |row| participant_ids.include?((row['user_id'] || row[:user_id]).to_s) }
-          raise SplitValidationError, 'Exact split amounts are required for all participants' if amount_rows.length != participant_ids.length
+          if amount_rows.length != participant_ids.length
+            raise SplitValidationError,
+                  'Exact split amounts are required for all participants'
+          end
 
           amounts_by_user = {}
           amount_rows.each do |row|
@@ -145,8 +150,13 @@ module Api
 
           participant_ids.map { |user_id| { user_id: user_id, amount: amounts_by_user[user_id] } }
         when 'percentage'
-          percentage_rows = split_params.select { |row| participant_ids.include?((row['user_id'] || row[:user_id]).to_s) }
-          raise SplitValidationError, 'Percentages are required for all participants' if percentage_rows.length != participant_ids.length
+          percentage_rows = split_params.select do |row|
+            participant_ids.include?((row['user_id'] || row[:user_id]).to_s)
+          end
+          if percentage_rows.length != participant_ids.length
+            raise SplitValidationError,
+                  'Percentages are required for all participants'
+          end
 
           percentages_by_user = {}
           percentage_rows.each do |row|
@@ -196,8 +206,8 @@ module Api
 
       def render_expense(expense, status = :ok)
         render json: expense, status: status, include: {
-          paid_by: { only: [:id, :name, :avatar_url] },
-          expense_splits: { include: { user: { only: [:id, :name, :avatar_url] } } }
+          paid_by: { only: %i[id name avatar_url] },
+          expense_splits: { include: { user: { only: %i[id name avatar_url] } } }
         }
       end
 
