@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Api
   module V1
     class BalancesController < ApplicationController
@@ -8,14 +10,14 @@ module Api
         # Calculate balances dynamically for MVP
         # A positive balance means the user is owed money
         # A negative balance means the user owes money
-        
+
         balances = Hash.new(0)
-        
+
         # 1. Process expenses
         @group.expenses.includes(:expense_splits).find_each do |expense|
           # The person who paid getting the full amount
           balances[expense.paid_by_id] += expense.amount
-          
+
           # Subtract each split amount from the corresponding user
           expense.expense_splits.each do |split|
             balances[split.user_id] -= split.amount

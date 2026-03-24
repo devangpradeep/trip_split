@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Api
   module V1
     class SettlementsController < ApplicationController
@@ -10,46 +12,44 @@ module Api
       def index
         @settlements = @group.settlements.includes(:from_user, :to_user).order(date: :desc)
         render json: @settlements, include: {
-          from_user: { only: [:id, :name, :avatar_url] },
-          to_user: { only: [:id, :name, :avatar_url] }
+          from_user: { only: %i[id name avatar_url] },
+          to_user: { only: %i[id name avatar_url] }
         }
       end
 
       def create
-        begin
-          to_user = find_settlement_recipient!
-          amount = settlement_amount!
-          max_payable = max_payable_to(to_user.id)
-          raise SettlementValidationError, 'No payable balance found for this member' if max_payable <= 0
+        to_user = find_settlement_recipient!
+        amount = settlement_amount!
+        max_payable = max_payable_to(to_user.id)
+        raise SettlementValidationError, 'No payable balance found for this member' if max_payable <= 0
 
-          if amount > max_payable
-            raise SettlementValidationError, "Amount exceeds payable limit of #{format('%.2f', max_payable.to_f)}"
-          end
-
-          @settlement = @group.settlements.build(
-            from_user: current_user,
-            to_user: to_user,
-            amount: amount,
-            date: settlement_params[:date].presence || Date.current,
-            note: settlement_params[:note]
-          )
-
-          @settlement.save!
-          render json: @settlement, status: :created, include: {
-            from_user: { only: [:id, :name, :avatar_url] },
-            to_user: { only: [:id, :name, :avatar_url] }
-          }
-        rescue SettlementValidationError => e
-          render json: { errors: [e.message] }, status: :unprocessable_entity
-        rescue ActiveRecord::RecordInvalid
-          render json: { errors: @settlement.errors.full_messages }, status: :unprocessable_entity
+        if amount > max_payable
+          raise SettlementValidationError, "Amount exceeds payable limit of #{format('%.2f', max_payable.to_f)}"
         end
+
+        @settlement = @group.settlements.build(
+          from_user: current_user,
+          to_user: to_user,
+          amount: amount,
+          date: settlement_params[:date].presence || Date.current,
+          note: settlement_params[:note]
+        )
+
+        @settlement.save!
+        render json: @settlement, status: :created, include: {
+          from_user: { only: %i[id name avatar_url] },
+          to_user: { only: %i[id name avatar_url] }
+        }
+      rescue SettlementValidationError => e
+        render json: { errors: [e.message] }, status: :unprocessable_entity
+      rescue ActiveRecord::RecordInvalid
+        render json: { errors: @settlement.errors.full_messages }, status: :unprocessable_entity
       end
 
       def show
         render json: @settlement, include: {
-          from_user: { only: [:id, :name, :avatar_url] },
-          to_user: { only: [:id, :name, :avatar_url] }
+          from_user: { only: %i[id name avatar_url] },
+          to_user: { only: %i[id name avatar_url] }
         }
       end
 
@@ -95,7 +95,7 @@ module Api
       def max_payable_to(recipient_id)
         balances = current_group_balances
         current_user_owes = [-(balances[current_user.id] || 0), 0].max
-        recipient_is_owed = [(balances[recipient_id] || 0), 0].max
+        recipient_is_owed = [balances[recipient_id] || 0, 0].max
         [current_user_owes, recipient_is_owed].min
       end
 

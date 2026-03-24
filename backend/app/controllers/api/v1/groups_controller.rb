@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 module Api
   module V1
     class GroupsController < ApplicationController
@@ -6,14 +8,14 @@ module Api
 
       def index
         @groups = current_user.groups.includes(:members)
-        render json: @groups, include: { members: { only: [:id, :name, :avatar_url] } }
+        render json: @groups, include: { members: { only: %i[id name avatar_url] } }
       end
 
       def show
         render json: @group, include: {
-          members: { only: [:id, :name, :email, :avatar_url] },
-          expenses: { include: [:paid_by, :expense_splits] },
-          settlements: { include: [:from_user, :to_user] }
+          members: { only: %i[id name email avatar_url] },
+          expenses: { include: %i[paid_by expense_splits] },
+          settlements: { include: %i[from_user to_user] }
         }
       end
 

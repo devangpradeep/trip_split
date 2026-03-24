@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 class Expense < ApplicationRecord
   belongs_to :group
   belongs_to :paid_by, class_name: 'User'

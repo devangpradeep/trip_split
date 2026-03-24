@@ -1,0 +1,45 @@
+AllCops:
+  NewCops: enable
+  SuggestExtensions: false
+  TargetRubyVersion: 3.2
+  UseCache: false
+  Exclude:
+    - 'bin/**/*'
+    - 'db/schema.rb'
+    - 'db/migrate/**/*'
+    - 'vendor/**/*'
+
+Style/Documentation:
+  Enabled: false
+
+Layout/LineLength:
+  Max: 120
+  AllowedPatterns:
+    - '^\s*#'
+
+Metrics/BlockLength:
+  Exclude:
+    - 'config/initializers/devise.rb'
+    - 'config/routes.rb'
+
+Metrics/AbcSize:
+  Exclude:
+    - 'app/controllers/**/*'
+
+Metrics/ClassLength:
+  Exclude:
+    - 'app/controllers/**/*'
+
+Metrics/MethodLength:
+  Exclude:
+    - 'app/controllers/**/*'
+    - 'app/controllers/users/registrations_controller.rb'
+    - 'app/controllers/users/sessions_controller.rb'
+
+Metrics/CyclomaticComplexity:
+  Exclude:
+    - 'app/controllers/**/*'
+
+Metrics/PerceivedComplexity:
+  Exclude:
+    - 'app/controllers/**/*'
