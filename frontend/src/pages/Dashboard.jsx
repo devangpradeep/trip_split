@@ -48,10 +48,10 @@ const Dashboard = () => {
   return (
     <div className="container" style={{ paddingBottom: '5rem' }}>
       {/* Header bar */}
-      <header className="glass-panel flex justify-between items-center" style={{ padding: '1rem 1.5rem', marginBottom: '2rem' }}>
+      <header className="glass-panel dashboard-header" style={{ padding: '1rem 1.5rem', marginBottom: '2rem' }}>
         <h1 className="text-2xl font-bold heading-gradient">Tripsplit</h1>
         
-        <div className="flex items-center gap-4">
+        <div className="dashboard-header-actions">
           <div className="flex items-center gap-2" style={{ color: 'var(--text-secondary)' }}>
             <UserCircle size={20} />
             <span style={{ fontWeight: '500' }}>{user?.name}</span>
@@ -63,7 +63,7 @@ const Dashboard = () => {
       </header>
 
       {/* Main Content */}
-      <div className="flex justify-between items-center" style={{ marginBottom: '1.5rem' }}>
+      <div className="dashboard-toolbar" style={{ marginBottom: '1.5rem' }}>
         <h2 className="text-2xl font-bold">Your Groups</h2>
         <button 
           className="btn btn-primary"
@@ -76,8 +76,8 @@ const Dashboard = () => {
       {showAddGroup && (
         <div className="glass-panel animate-fade-in" style={{ marginBottom: '2rem' }}>
           <h3 style={{ marginBottom: '1rem', fontSize: '1.2rem' }}>Create New Group</h3>
-          <form onSubmit={handleCreateGroup} className="flex gap-4 items-center">
-            <div className="form-group" style={{ margin: 0, flex: 1 }}>
+          <form onSubmit={handleCreateGroup} className="create-group-form">
+            <div className="form-group create-group-name-field" style={{ margin: 0 }}>
               <input 
                 type="text" 
                 placeholder="Group Name (e.g., Goa Trip)" 
@@ -86,7 +86,7 @@ const Dashboard = () => {
                 autoFocus
               />
             </div>
-            <div className="form-group" style={{ margin: 0, width: '120px' }}>
+            <div className="form-group create-group-currency-field" style={{ margin: 0 }}>
               <select 
                 value={newGroupCurrency} 
                 onChange={(e) => setNewGroupCurrency(e.target.value)}
@@ -96,14 +96,16 @@ const Dashboard = () => {
                 <option value="EUR">EUR (€)</option>
               </select>
             </div>
-            <button type="submit" className="btn btn-primary" style={{ padding: '0.9rem 1.5rem' }}>Create</button>
-            <button 
-              type="button" 
-              className="btn btn-secondary" 
-              onClick={() => setShowAddGroup(false)}
-            >
-              Cancel
-            </button>
+            <div className="create-group-actions">
+              <button type="submit" className="btn btn-primary create-group-submit-btn">Create</button>
+              <button
+                type="button"
+                className="btn btn-secondary create-group-cancel-btn"
+                onClick={() => setShowAddGroup(false)}
+              >
+                Cancel
+              </button>
+            </div>
           </form>
         </div>
       )}
