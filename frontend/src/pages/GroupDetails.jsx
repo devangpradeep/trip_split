@@ -213,10 +213,7 @@ const GroupDetails = () => {
   const [editingExpenseId, setEditingExpenseId] = useState(null);
   const [savingExpense, setSavingExpense] = useState(false);
   const [deletingExpenseId, setDeletingExpenseId] = useState(null);
-  const [expenseViewMode, setExpenseViewMode] = useState(() => {
-    const savedMode = localStorage.getItem('tripsplit_expense_view_mode');
-    return savedMode === 'compact' ? 'compact' : 'comfort';
-  });
+  const [mobileSection, setMobileSection] = useState('expenses');
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [pendingDeleteExpense, setPendingDeleteExpense] = useState(null);
   const [deleteExpenseError, setDeleteExpenseError] = useState('');
@@ -262,10 +259,6 @@ const GroupDetails = () => {
   useEffect(() => {
     fetchGroupData();
   }, [fetchGroupData]);
-
-  useEffect(() => {
-    localStorage.setItem('tripsplit_expense_view_mode', expenseViewMode);
-  }, [expenseViewMode]);
 
   useEffect(() => {
     if (!showAddExpense || !group) return;
@@ -835,28 +828,36 @@ const GroupDetails = () => {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 350px', gap: '2rem', marginTop: '1rem', alignItems: 'start' }}>
+      <div className="group-mobile-sections">
+        <button
+          type="button"
+          className={`group-mobile-section-btn ${mobileSection === 'expenses' ? 'active' : ''}`}
+          onClick={() => setMobileSection('expenses')}
+        >
+          Expenses ({expenses.length})
+        </button>
+        <button
+          type="button"
+          className={`group-mobile-section-btn ${mobileSection === 'balances' ? 'active' : ''}`}
+          onClick={() => setMobileSection('balances')}
+        >
+          Balances
+        </button>
+        <button
+          type="button"
+          className={`group-mobile-section-btn ${mobileSection === 'members' ? 'active' : ''}`}
+          onClick={() => setMobileSection('members')}
+        >
+          Members ({group.members.length})
+        </button>
+      </div>
+
+      <div className="group-details-layout">
         {/* Left Column - Expenses */}
-        <div className="flex flex-col gap-4">
-          <div className="flex justify-between items-center">
+        <div className={`flex flex-col gap-4 group-section ${mobileSection === 'expenses' ? 'active' : ''}`}>
+          <div className="group-details-expense-header">
             <h2 className="text-2xl font-bold">Expenses</h2>
-            <div className="flex items-center gap-2">
-              <div className="expense-view-toggle">
-                <button
-                  type="button"
-                  className={`btn btn-secondary view-toggle-btn ${expenseViewMode === 'comfort' ? 'active' : ''}`}
-                  onClick={() => setExpenseViewMode('comfort')}
-                >
-                  Comfort
-                </button>
-                <button
-                  type="button"
-                  className={`btn btn-secondary view-toggle-btn ${expenseViewMode === 'compact' ? 'active' : ''}`}
-                  onClick={() => setExpenseViewMode('compact')}
-                >
-                  Compact
-                </button>
-              </div>
+            <div className="group-details-expense-actions">
               <button className="btn btn-primary" onClick={toggleAddExpensePanel}>
                 <Plus size={18} /> Add Expense
               </button>
@@ -876,7 +877,7 @@ const GroupDetails = () => {
                     onChange={(e) => setExpenseForm((prev) => ({ ...prev, description: e.target.value }))}
                   />
                 </div>
-                <div className="flex gap-3">
+                <div className="expense-form-fields-row">
                   <div className="form-group" style={{ marginBottom: 0, flex: 1 }}>
                     <label>Amount ({group.currency})</label>
                     <input
@@ -973,7 +974,7 @@ const GroupDetails = () => {
             </div>
           )}
 
-          <div className={`flex flex-col gap-3 expense-list ${expenseViewMode === 'compact' ? 'expense-list-compact' : ''}`}>
+          <div className="flex flex-col gap-3 expense-list expense-list-compact">
             {expenses.length === 0 ? (
               <div className="glass-panel text-center" style={{ padding: '3rem 2rem' }}>
                 <Receipt size={40} style={{ color: 'var(--text-secondary)', margin: '0 auto 1rem', opacity: 0.5 }} />
@@ -981,7 +982,7 @@ const GroupDetails = () => {
               </div>
             ) : (
               expenses.map(expense => (
-                <div key={expense.id} className={`glass-panel expense-row ${expenseViewMode === 'compact' ? 'expense-row-compact' : 'expense-row-comfort'}`}>
+                <div key={expense.id} className="glass-panel expense-row expense-row-compact">
                   <div className="flex items-center gap-4 expense-main">
                     <div className="expense-icon-wrap">
                       <Receipt size={24} color="var(--primary-color)" />
@@ -1053,15 +1054,15 @@ const GroupDetails = () => {
         </div>
 
         {/* Right Column - Balances & Members */}
-        <div className="flex flex-col gap-6">
-          <div>
+        <div className="group-side-panels">
+          <div className={`group-section ${mobileSection === 'balances' ? 'active' : ''}`}>
             <h2 className="text-2xl font-bold" style={{ marginBottom: '1rem' }}>Balances</h2>
             <div className="flex flex-col gap-3">
               {orderedBalances.map(b => renderBalanceCard(b))}
             </div>
           </div>
 
-          <div>
+          <div className={`group-section ${mobileSection === 'members' ? 'active' : ''}`}>
             <h2 className="text-xl font-bold flex justify-between items-center" style={{ marginBottom: '1rem' }}>
               Members ({group.members.length})
               <button
@@ -1102,7 +1103,7 @@ const GroupDetails = () => {
                 />
               </div>
 
-              <div className="flex gap-3">
+              <div className="expense-form-fields-row">
                 <div className="form-group" style={{ marginBottom: 0, flex: 1 }}>
                   <label>Amount ({group.currency})</label>
                   <input
