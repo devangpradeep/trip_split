@@ -1,6 +1,8 @@
 module Api
   module V1
     class SettlementsController < ApplicationController
+      class SettlementValidationError < StandardError; end
+
       before_action :authenticate_user!
       before_action :set_group
       before_action :set_settlement, only: %i[show destroy]
@@ -14,14 +16,32 @@ module Api
       end
 
       def create
-        @settlement = @group.settlements.build(settlement_params)
-        
-        if @settlement.save
+        begin
+          to_user = find_settlement_recipient!
+          amount = settlement_amount!
+          max_payable = max_payable_to(to_user.id)
+          raise SettlementValidationError, 'No payable balance found for this member' if max_payable <= 0
+
+          if amount > max_payable
+            raise SettlementValidationError, "Amount exceeds payable limit of #{format('%.2f', max_payable.to_f)}"
+          end
+
+          @settlement = @group.settlements.build(
+            from_user: current_user,
+            to_user: to_user,
+            amount: amount,
+            date: settlement_params[:date].presence || Date.current,
+            note: settlement_params[:note]
+          )
+
+          @settlement.save!
           render json: @settlement, status: :created, include: {
             from_user: { only: [:id, :name, :avatar_url] },
             to_user: { only: [:id, :name, :avatar_url] }
           }
-        else
+        rescue SettlementValidationError => e
+          render json: { errors: [e.message] }, status: :unprocessable_entity
+        rescue ActiveRecord::RecordInvalid
           render json: { errors: @settlement.errors.full_messages }, status: :unprocessable_entity
         end
       end
@@ -49,7 +69,52 @@ module Api
       end
 
       def settlement_params
-        params.require(:settlement).permit(:from_user_id, :to_user_id, :amount, :date, :note)
+        params.require(:settlement).permit(:to_user_id, :amount, :date, :note)
+      end
+
+      def find_settlement_recipient!
+        recipient_id = settlement_params[:to_user_id]
+        raise SettlementValidationError, 'Recipient is required' if recipient_id.blank?
+
+        recipient = @group.members.find_by(id: recipient_id)
+        raise SettlementValidationError, 'Recipient must be a member of this group' unless recipient
+        raise SettlementValidationError, 'You cannot settle with yourself' if recipient.id == current_user.id
+
+        recipient
+      end
+
+      def settlement_amount!
+        amount = BigDecimal(settlement_params[:amount].to_s)
+        raise SettlementValidationError, 'Amount must be greater than zero' if amount <= 0
+
+        amount.round(2)
+      rescue ArgumentError
+        raise SettlementValidationError, 'Invalid settlement amount'
+      end
+
+      def max_payable_to(recipient_id)
+        balances = current_group_balances
+        current_user_owes = [-(balances[current_user.id] || 0), 0].max
+        recipient_is_owed = [(balances[recipient_id] || 0), 0].max
+        [current_user_owes, recipient_is_owed].min
+      end
+
+      def current_group_balances
+        balances = Hash.new(0.to_d)
+
+        @group.expenses.includes(:expense_splits).find_each do |expense|
+          balances[expense.paid_by_id] += expense.amount.to_d
+          expense.expense_splits.each do |split|
+            balances[split.user_id] -= split.amount.to_d
+          end
+        end
+
+        @group.settlements.find_each do |settlement|
+          balances[settlement.from_user_id] += settlement.amount.to_d
+          balances[settlement.to_user_id] -= settlement.amount.to_d
+        end
+
+        balances
       end
     end
   end
