@@ -320,7 +320,7 @@ Devise.setup do |config|
     jwt_expiration_hours = ENV.fetch('DEVISE_JWT_EXPIRATION_HOURS', '24').to_i
     jwt_expiration_hours = 24 if jwt_expiration_hours <= 0
 
-    jwt.secret = ENV.fetch('DEVISE_JWT_SECRET_KEY', Rails.application.secret_key_base)
+    jwt.secret = ENV.fetch('DEVISE_JWT_SECRET_KEY') { Rails.application.secret_key_base }
     jwt.dispatch_requests = [
       ['POST', %r{^/users/sign_in$}],
       ['POST', %r{^/api/v1/auth/login$}]

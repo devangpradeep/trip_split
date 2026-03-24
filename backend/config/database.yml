@@ -82,6 +82,4 @@ test:
 #
 production:
   <<: *default
-  database: tripsplit_production
-  username: tripsplit
-  password: <%= ENV["TRIPSPLIT_DATABASE_PASSWORD"] %>
+  url: <%= ENV.fetch("DATABASE_URL") %>
