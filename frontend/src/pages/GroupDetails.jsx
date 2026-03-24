@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import api, { groupMembersApi } from '../lib/api';
 import { useAuth } from '../contexts/AuthContext';
-import { ArrowLeft, Plus, Receipt, UserPlus } from 'lucide-react';
+import { ArrowLeft, Plus, Receipt, UserPlus, Pencil, Trash2 } from 'lucide-react';
 
 const GroupDetails = () => {
   const { id } = useParams();
@@ -18,6 +18,26 @@ const GroupDetails = () => {
   const [memberEmail, setMemberEmail] = useState('');
   const [addingMember, setAddingMember] = useState(false);
   const [addMemberError, setAddMemberError] = useState('');
+  const [showEditExpense, setShowEditExpense] = useState(false);
+  const [editingExpenseId, setEditingExpenseId] = useState(null);
+  const [savingExpense, setSavingExpense] = useState(false);
+  const [deletingExpenseId, setDeletingExpenseId] = useState(null);
+  const [expenseViewMode, setExpenseViewMode] = useState(() => {
+    const savedMode = localStorage.getItem('tripsplit_expense_view_mode');
+    return savedMode === 'compact' ? 'compact' : 'comfort';
+  });
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [pendingDeleteExpense, setPendingDeleteExpense] = useState(null);
+  const [deleteExpenseError, setDeleteExpenseError] = useState('');
+  const [editExpenseError, setEditExpenseError] = useState('');
+  const [editExpenseForm, setEditExpenseForm] = useState({
+    description: '',
+    amount: '',
+    date: '',
+    split_type: 'equal',
+    paid_by_id: '',
+    splits: []
+  });
   const [expenseForm, setExpenseForm] = useState({
     description: '',
     amount: '',
@@ -27,6 +47,10 @@ const GroupDetails = () => {
   useEffect(() => {
     fetchGroupData();
   }, [id]);
+
+  useEffect(() => {
+    localStorage.setItem('tripsplit_expense_view_mode', expenseViewMode);
+  }, [expenseViewMode]);
 
   const fetchGroupData = async () => {
     try {
@@ -102,6 +126,182 @@ const GroupDetails = () => {
     }
   };
 
+  const openEditExpenseModal = (expense) => {
+    const totalAmount = parseFloat(expense.amount || 0);
+    const uiSplitType = expense.split_type === 'exact' ? 'amount' : expense.split_type;
+    const splitsByUserId = new Map(
+      expense.expense_splits.map((split) => [split.user.id, split])
+    );
+
+    const formSplits = group.members.map((member) => {
+      const existingSplit = splitsByUserId.get(member.id);
+      const splitAmount = existingSplit ? parseFloat(existingSplit.amount || 0) : 0;
+      const splitPercentage = totalAmount > 0 ? (splitAmount / totalAmount) * 100 : 0;
+
+      return {
+        user_id: member.id,
+        name: member.name,
+        included: Boolean(existingSplit),
+        amount: splitAmount.toFixed(2),
+        percentage: splitPercentage.toFixed(2)
+      };
+    });
+
+    setEditExpenseError('');
+    setEditingExpenseId(expense.id);
+    setEditExpenseForm({
+      description: expense.description || '',
+      amount: parseFloat(expense.amount || 0).toFixed(2),
+      date: expense.date || new Date().toISOString().split('T')[0],
+      split_type: uiSplitType || 'equal',
+      paid_by_id: expense.paid_by?.id || user.id,
+      splits: formSplits
+    });
+    setShowEditExpense(true);
+  };
+
+  const updateEditSplit = (userId, field, value) => {
+    setEditExpenseForm((prev) => ({
+      ...prev,
+      splits: prev.splits.map((split) =>
+        split.user_id === userId ? { ...split, [field]: value } : split
+      )
+    }));
+  };
+
+  const toggleEditSplitParticipant = (userId, included) => {
+    setEditExpenseForm((prev) => ({
+      ...prev,
+      splits: prev.splits.map((split) =>
+        split.user_id === userId ? { ...split, included } : split
+      )
+    }));
+  };
+
+  const rebalanceSplitOnBlur = (editedUserId) => {
+    setEditExpenseForm((prev) => {
+      if (prev.split_type === 'equal') return prev;
+
+      const includedSplits = prev.splits.filter((split) => split.included);
+      if (includedSplits.length < 2) return prev;
+
+      const preferredAutoSplit = includedSplits.find(
+        (split) => split.user_id === user.id && split.user_id !== editedUserId
+      );
+      const fallbackAutoSplit = includedSplits.find(
+        (split) => split.user_id !== editedUserId
+      );
+      const autoSplit = preferredAutoSplit || fallbackAutoSplit;
+      if (!autoSplit) return prev;
+
+      const targetTotal =
+        prev.split_type === 'percentage'
+          ? 100
+          : (parseFloat(prev.amount) || 0);
+
+      const sumExcludingAuto = includedSplits.reduce((sum, split) => {
+        if (split.user_id === autoSplit.user_id) return sum;
+        const value = prev.split_type === 'percentage'
+          ? (parseFloat(split.percentage) || 0)
+          : (parseFloat(split.amount) || 0);
+        return sum + value;
+      }, 0);
+
+      const rawRemaining = targetTotal - sumExcludingAuto;
+      const remaining = Math.max(0, rawRemaining);
+
+      return {
+        ...prev,
+        splits: prev.splits.map((split) => {
+          if (split.user_id !== autoSplit.user_id) return split;
+
+          if (prev.split_type === 'percentage') {
+            return { ...split, percentage: remaining.toFixed(2) };
+          }
+
+          return { ...split, amount: remaining.toFixed(2) };
+        })
+      };
+    });
+  };
+
+  const handleUpdateExpense = async (e) => {
+    e.preventDefault();
+    if (!editingExpenseId) return;
+
+    const includedSplits = editExpenseForm.splits.filter((split) => split.included);
+    if (includedSplits.length === 0) {
+      setEditExpenseError('Select at least one participant for the split');
+      return;
+    }
+
+    const splitsPayload = includedSplits.map((split) => {
+      if (editExpenseForm.split_type === 'percentage') {
+        return { user_id: split.user_id, percentage: split.percentage };
+      }
+      if (editExpenseForm.split_type === 'amount') {
+        return { user_id: split.user_id, amount: split.amount };
+      }
+      return { user_id: split.user_id };
+    });
+
+    try {
+      setSavingExpense(true);
+      setEditExpenseError('');
+      await api.patch(`/groups/${id}/expenses/${editingExpenseId}`, {
+        expense: {
+          description: editExpenseForm.description,
+          amount: editExpenseForm.amount,
+          date: editExpenseForm.date,
+          currency: group.currency,
+          paid_by_id: editExpenseForm.paid_by_id,
+          split_type: editExpenseForm.split_type,
+          splits: splitsPayload
+        }
+      });
+
+      setShowEditExpense(false);
+      setEditingExpenseId(null);
+      fetchGroupData();
+    } catch (error) {
+      const serverError = error.response?.data?.errors?.join(', ');
+      const fallbackError = error.response?.data?.error;
+      setEditExpenseError(serverError || fallbackError || 'Failed to update expense');
+    } finally {
+      setSavingExpense(false);
+    }
+  };
+
+  const openDeleteExpenseConfirm = (expense) => {
+    setDeleteExpenseError('');
+    setPendingDeleteExpense(expense);
+    setShowDeleteConfirm(true);
+  };
+
+  const handleDeleteExpense = async () => {
+    if (!pendingDeleteExpense) return;
+    const expenseId = pendingDeleteExpense.id;
+
+    try {
+      setDeletingExpenseId(expenseId);
+      setDeleteExpenseError('');
+      await api.delete(`/groups/${id}/expenses/${expenseId}`);
+
+      if (editingExpenseId === expenseId) {
+        setShowEditExpense(false);
+        setEditingExpenseId(null);
+      }
+
+      setShowDeleteConfirm(false);
+      setPendingDeleteExpense(null);
+      fetchGroupData();
+    } catch (error) {
+      setDeleteExpenseError(error.response?.data?.error || 'Failed to delete expense');
+    } finally {
+      setDeletingExpenseId(null);
+    }
+  };
+
   const renderBalanceCard = (balanceData) => {
     const isCurrentUser = balanceData.user.id === user.id;
     const amount = balanceData.balance;
@@ -145,7 +345,28 @@ const GroupDetails = () => {
   if (!group) return <div className="container text-center pt-20">Group not found</div>;
 
   const currencySym = group.currency === 'INR' ? '₹' : (group.currency === 'USD' ? '$' : '€');
-  const canManageMembers = group.created_by_id === user.id;
+  const isGroupAdmin = group.created_by_id === user.id;
+  const canManageMembers = isGroupAdmin;
+  const canEditExpense = (expense) => isGroupAdmin || expense.paid_by.id === user.id;
+  const canDeleteExpense = (expense) => isGroupAdmin || expense.paid_by.id === user.id;
+  const includedEditSplits = editExpenseForm.splits.filter((split) => split.included);
+  const orderedBalances = [
+    ...balances.filter((balance) => balance.user.id !== user.id),
+    ...balances.filter((balance) => balance.user.id === user.id)
+  ];
+  const orderedMembers = [
+    ...group.members.filter((member) => member.id !== user.id),
+    ...group.members.filter((member) => member.id === user.id)
+  ];
+  const enteredSplitTotal = includedEditSplits.reduce((sum, split) => {
+    if (editExpenseForm.split_type === 'percentage') {
+      return sum + (parseFloat(split.percentage) || 0);
+    }
+    if (editExpenseForm.split_type === 'amount') {
+      return sum + (parseFloat(split.amount) || 0);
+    }
+    return sum;
+  }, 0);
 
   return (
     <div className="container flex-col gap-6" style={{ paddingBottom: '5rem' }}>
@@ -165,9 +386,27 @@ const GroupDetails = () => {
         <div className="flex flex-col gap-4">
           <div className="flex justify-between items-center">
             <h2 className="text-2xl font-bold">Expenses</h2>
-            <button className="btn btn-primary" onClick={() => setShowAddExpense(!showAddExpense)}>
-              <Plus size={18} /> Add Expense
-            </button>
+            <div className="flex items-center gap-2">
+              <div className="expense-view-toggle">
+                <button
+                  type="button"
+                  className={`btn btn-secondary view-toggle-btn ${expenseViewMode === 'comfort' ? 'active' : ''}`}
+                  onClick={() => setExpenseViewMode('comfort')}
+                >
+                  Comfort
+                </button>
+                <button
+                  type="button"
+                  className={`btn btn-secondary view-toggle-btn ${expenseViewMode === 'compact' ? 'active' : ''}`}
+                  onClick={() => setExpenseViewMode('compact')}
+                >
+                  Compact
+                </button>
+              </div>
+              <button className="btn btn-primary" onClick={() => setShowAddExpense(!showAddExpense)}>
+                <Plus size={18} /> Add Expense
+              </button>
+            </div>
           </div>
 
           {showAddExpense && (
@@ -199,7 +438,7 @@ const GroupDetails = () => {
             </div>
           )}
 
-          <div className="flex flex-col gap-3">
+          <div className={`flex flex-col gap-3 expense-list ${expenseViewMode === 'compact' ? 'expense-list-compact' : ''}`}>
             {expenses.length === 0 ? (
               <div className="glass-panel text-center" style={{ padding: '3rem 2rem' }}>
                 <Receipt size={40} style={{ color: 'var(--text-secondary)', margin: '0 auto 1rem', opacity: 0.5 }} />
@@ -207,19 +446,19 @@ const GroupDetails = () => {
               </div>
             ) : (
               expenses.map(expense => (
-                <div key={expense.id} className="glass-panel flex justify-between items-center" style={{ padding: '1rem 1.5rem' }}>
-                  <div className="flex items-center gap-4">
-                    <div style={{ background: 'rgba(255,255,255,0.05)', padding: '0.75rem', borderRadius: '12px' }}>
+                <div key={expense.id} className={`glass-panel expense-row ${expenseViewMode === 'compact' ? 'expense-row-compact' : 'expense-row-comfort'}`}>
+                  <div className="flex items-center gap-4 expense-main">
+                    <div className="expense-icon-wrap">
                       <Receipt size={24} color="var(--primary-color)" />
                     </div>
                     <div>
-                      <div style={{ fontWeight: 600, fontSize: '1.1rem' }}>{expense.description}</div>
-                      <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                      <div className="expense-title">{expense.description}</div>
+                      <div className="expense-subtitle">
                         {expense.paid_by.id === user.id ? 'You' : expense.paid_by.name} paid {currencySym}{parseFloat(expense.amount).toFixed(2)}
                       </div>
                     </div>
                   </div>
-                  <div className="text-right">
+                  <div className="text-right expense-side">
                     {/* MVP display: if you are involved, show your split */}
                     {(() => {
                       const yourSplit = expense.expense_splits.find(s => s.user.id === user.id);
@@ -251,6 +490,26 @@ const GroupDetails = () => {
                         </div>;
                       }
                     })()}
+                    <div className="expense-action-stack">
+                      {canEditExpense(expense) && (
+                        <button
+                          className="btn btn-secondary expense-action-btn"
+                          onClick={() => openEditExpenseModal(expense)}
+                          disabled={deletingExpenseId === expense.id}
+                        >
+                          <Pencil size={14} /> Edit
+                        </button>
+                      )}
+                      {canDeleteExpense(expense) && (
+                        <button
+                          className="btn btn-danger expense-action-btn"
+                          onClick={() => openDeleteExpenseConfirm(expense)}
+                          disabled={deletingExpenseId === expense.id}
+                        >
+                          <Trash2 size={14} /> {deletingExpenseId === expense.id ? 'Deleting...' : 'Delete'}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))
@@ -263,7 +522,7 @@ const GroupDetails = () => {
           <div>
             <h2 className="text-2xl font-bold" style={{ marginBottom: '1rem' }}>Balances</h2>
             <div className="flex flex-col gap-3">
-              {balances.map(b => renderBalanceCard(b))}
+              {orderedBalances.map(b => renderBalanceCard(b))}
             </div>
           </div>
 
@@ -281,7 +540,7 @@ const GroupDetails = () => {
               </button>
             </h2>
             <div className="glass-panel flex flex-col gap-3" style={{ padding: '1rem 1.5rem' }}>
-              {group.members.map(member => (
+              {orderedMembers.map(member => (
                 <div key={member.id} className="flex items-center gap-3">
                   <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.85rem' }}>
                     {member.name.charAt(0)}
@@ -294,9 +553,124 @@ const GroupDetails = () => {
         </div>
       </div>
 
+      {showEditExpense && (
+        <div className="modal-overlay">
+          <div className="glass-panel animate-fade-in modal-card" style={{ width: '100%', maxWidth: 760, maxHeight: '90vh', overflowY: 'auto' }}>
+            <h3 style={{ marginBottom: '1rem' }}>Edit Expense</h3>
+            <form onSubmit={handleUpdateExpense} className="flex flex-col gap-3">
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label>Description</label>
+                <input
+                  required
+                  value={editExpenseForm.description}
+                  onChange={(e) => setEditExpenseForm((prev) => ({ ...prev, description: e.target.value }))}
+                />
+              </div>
+
+              <div className="flex gap-3">
+                <div className="form-group" style={{ marginBottom: 0, flex: 1 }}>
+                  <label>Amount ({group.currency})</label>
+                  <input
+                    required
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    value={editExpenseForm.amount}
+                    onChange={(e) => setEditExpenseForm((prev) => ({ ...prev, amount: e.target.value }))}
+                  />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0, flex: 1 }}>
+                  <label>Date</label>
+                  <input
+                    required
+                    type="date"
+                    value={editExpenseForm.date}
+                    onChange={(e) => setEditExpenseForm((prev) => ({ ...prev, date: e.target.value }))}
+                  />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0, flex: 1 }}>
+                  <label>Split Type</label>
+                  <select
+                    value={editExpenseForm.split_type}
+                    onChange={(e) => setEditExpenseForm((prev) => ({ ...prev, split_type: e.target.value }))}
+                  >
+                    <option value="equal">Equal</option>
+                    <option value="amount">Amount</option>
+                    <option value="percentage">Percentage</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style={{ marginTop: '0.5rem' }}>
+                <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '0.6rem' }}>
+                  Choose participants and split values:
+                </div>
+                <div className="flex flex-col gap-2">
+                  {editExpenseForm.splits.map((split) => (
+                    <div key={split.user_id} className="split-row">
+                      <input
+                        className="split-check"
+                        type="checkbox"
+                        checked={split.included}
+                        onChange={(e) => toggleEditSplitParticipant(split.user_id, e.target.checked)}
+                      />
+                      <span className="split-member-name">{split.user_id === user.id ? 'You' : split.name}</span>
+                      {editExpenseForm.split_type !== 'equal' && split.included ? (
+                        <input
+                          className="split-value-input"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={editExpenseForm.split_type === 'percentage' ? split.percentage : split.amount}
+                          onChange={(e) => updateEditSplit(
+                            split.user_id,
+                            editExpenseForm.split_type === 'percentage' ? 'percentage' : 'amount',
+                            e.target.value
+                          )}
+                          onBlur={() => rebalanceSplitOnBlur(split.user_id)}
+                        />
+                      ) : (
+                        <span className="split-auto-value">
+                          {editExpenseForm.split_type === 'equal' ? 'Auto' : '--'}
+                        </span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {editExpenseForm.split_type !== 'equal' && (
+                <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                  {editExpenseForm.split_type === 'percentage'
+                    ? `Entered percentage total: ${enteredSplitTotal.toFixed(2)}% (must be 100%)`
+                    : `Entered amount total: ${currencySym}${enteredSplitTotal.toFixed(2)} (must match expense amount)`
+                  }
+                </div>
+              )}
+
+              {editExpenseError && <div className="error-text" style={{ margin: 0 }}>{editExpenseError}</div>}
+
+              <div className="flex gap-3" style={{ marginTop: '0.5rem' }}>
+                <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={savingExpense}>
+                  {savingExpense ? 'Saving...' : 'Save Changes'}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => setShowEditExpense(false)}
+                  disabled={savingExpense}
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {showAddMember && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '1rem' }}>
-          <div className="glass-panel animate-fade-in" style={{ width: '100%', maxWidth: 460 }}>
+        <div className="modal-overlay">
+          <div className="glass-panel animate-fade-in modal-card" style={{ width: '100%', maxWidth: 460 }}>
             <h3 style={{ marginBottom: '1rem' }}>Add Member</h3>
             <form onSubmit={handleAddMember} className="flex flex-col gap-3">
               <div className="form-group" style={{ marginBottom: 0 }}>
@@ -325,6 +699,47 @@ const GroupDetails = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {showDeleteConfirm && pendingDeleteExpense && (
+        <div className="modal-overlay">
+          <div className="glass-panel animate-fade-in modal-card" style={{ width: '100%', maxWidth: 460 }}>
+            <h3 style={{ marginBottom: '0.8rem' }}>Delete Expense</h3>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', marginBottom: '0.35rem' }}>
+              Are you sure you want to delete <strong style={{ color: 'var(--text-primary)' }}>{pendingDeleteExpense.description}</strong>?
+            </p>
+            <p style={{ color: 'var(--danger-color)', fontSize: '0.85rem', marginBottom: '1rem' }}>
+              This action cannot be undone.
+            </p>
+
+            {deleteExpenseError && <div className="error-text" style={{ margin: 0 }}>{deleteExpenseError}</div>}
+
+            <div className="flex gap-3" style={{ marginTop: '0.8rem' }}>
+              <button
+                type="button"
+                className="btn btn-danger"
+                style={{ flex: 1 }}
+                onClick={handleDeleteExpense}
+                disabled={deletingExpenseId === pendingDeleteExpense.id}
+              >
+                {deletingExpenseId === pendingDeleteExpense.id ? 'Deleting...' : 'Delete Expense'}
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => {
+                  if (deletingExpenseId) return;
+                  setShowDeleteConfirm(false);
+                  setPendingDeleteExpense(null);
+                  setDeleteExpenseError('');
+                }}
+                disabled={Boolean(deletingExpenseId)}
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}
