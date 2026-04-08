@@ -1,8 +1,70 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/useAuth';
 import api from '../lib/api';
 import { LogOut, Plus, Users, ArrowRight, UserCircle } from 'lucide-react';
+
+const DashboardCustomSelect = ({ value, options, onChange, disabled = false }) => {
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef(null);
+  const selectedOption = options.find((option) => option.value === value);
+
+  useEffect(() => {
+    const handleDocumentClick = (event) => {
+      if (!rootRef.current?.contains(event.target)) {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleDocumentClick);
+    return () => document.removeEventListener('mousedown', handleDocumentClick);
+  }, []);
+
+  useEffect(() => {
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, []);
+
+  return (
+    <div ref={rootRef} className={`custom-select ${open ? 'open' : ''}`}>
+      <button
+        type="button"
+        className="custom-select-trigger"
+        onClick={() => {
+          if (disabled) return;
+          setOpen((prev) => !prev);
+        }}
+        disabled={disabled}
+      >
+        <span>{selectedOption?.label || 'Select'}</span>
+        <span className="custom-select-caret">▾</span>
+      </button>
+      {open && (
+        <div className="custom-select-menu">
+          {options.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              className={`custom-select-option ${option.value === value ? 'active' : ''}`}
+              onClick={() => {
+                onChange(option.value);
+                setOpen(false);
+              }}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
 
 const Dashboard = () => {
   const { user, logout } = useAuth();
@@ -11,6 +73,11 @@ const Dashboard = () => {
   const [showAddGroup, setShowAddGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupCurrency, setNewGroupCurrency] = useState('INR');
+  const currencyOptions = [
+    { value: 'INR', label: 'INR (₹)' },
+    { value: 'USD', label: 'USD ($)' },
+    { value: 'EUR', label: 'EUR (€)' }
+  ];
 
   useEffect(() => {
     fetchGroups();
@@ -87,14 +154,11 @@ const Dashboard = () => {
               />
             </div>
             <div className="form-group create-group-currency-field" style={{ margin: 0 }}>
-              <select 
+              <DashboardCustomSelect
                 value={newGroupCurrency} 
-                onChange={(e) => setNewGroupCurrency(e.target.value)}
-              >
-                <option value="INR">INR (₹)</option>
-                <option value="USD">USD ($)</option>
-                <option value="EUR">EUR (€)</option>
-              </select>
+                options={currencyOptions}
+                onChange={setNewGroupCurrency}
+              />
             </div>
             <div className="create-group-actions">
               <button type="submit" className="btn btn-primary create-group-submit-btn">Create</button>

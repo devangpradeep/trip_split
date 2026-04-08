@@ -101,21 +101,7 @@ module Api
       end
 
       def current_group_balances
-        balances = Hash.new(0.to_d)
-
-        @group.expenses.includes(:expense_splits).find_each do |expense|
-          balances[expense.paid_by_id] += expense.amount.to_d
-          expense.expense_splits.each do |split|
-            balances[split.user_id] -= split.amount.to_d
-          end
-        end
-
-        @group.settlements.find_each do |settlement|
-          balances[settlement.from_user_id] += settlement.amount.to_d
-          balances[settlement.to_user_id] -= settlement.amount.to_d
-        end
-
-        balances
+        Balances::Calculator.new(@group).call
       end
 
       def ensure_can_delete_settlement!
