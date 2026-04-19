@@ -49,6 +49,7 @@ Backend (`backend/config/database.yml`, `backend/config/initializers/devise.rb`)
 - `DEVISE_JWT_SECRET_KEY` (recommended to set in non-local envs)
 - `DEVISE_JWT_EXPIRATION_HOURS` (default: `24`)
 - `CORS_ALLOWED_ORIGINS` (comma-separated, default local dev origins only)
+- `FRONTEND_APP_URL` (recommended in production for invite link generation)
 - `RAILS_MASTER_KEY` (required in production)
 - `FORCE_SSL` (default: `true` in production)
 
