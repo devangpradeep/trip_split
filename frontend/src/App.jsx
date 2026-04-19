@@ -5,6 +5,7 @@ import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import GroupDetails from './pages/GroupDetails';
+import JoinGroup from './pages/JoinGroup';
 
 // Protected Route Wrapper
 const ProtectedRoute = ({ children }) => {
@@ -28,6 +29,7 @@ const AppRoutes = () => {
     <Routes>
       <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login />} />
       <Route path="/register" element={user ? <Navigate to="/" replace /> : <Register />} />
+      <Route path="/join/:token" element={<JoinGroup />} />
       
       <Route path="/" element={
         <ProtectedRoute>

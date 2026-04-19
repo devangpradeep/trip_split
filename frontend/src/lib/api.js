@@ -55,4 +55,17 @@ export const groupMembersApi = {
   })
 };
 
+export const groupInvitesApi = {
+  list: (groupId) => api.get(`/groups/${groupId}/invites`),
+  create: (groupId, { expiresInHours = 48, noExpiry = false } = {}) => api.post(`/groups/${groupId}/invites`, {
+    invite: noExpiry ? { no_expiry: true } : { expires_in_hours: expiresInHours }
+  }),
+  revoke: (groupId, inviteId) => api.delete(`/groups/${groupId}/invites/${inviteId}`)
+};
+
+export const inviteLinksApi = {
+  get: (token) => api.get(`/invites/${token}`),
+  accept: (token) => api.post(`/invites/${token}/accept`)
+};
+
 export default api;

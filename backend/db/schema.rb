@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_03_23_184000) do
+ActiveRecord::Schema[8.1].define(version: 2026_04_16_083000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pgcrypto"
@@ -38,6 +38,20 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_23_184000) do
     t.datetime "updated_at", null: false
     t.index ["group_id"], name: "index_expenses_on_group_id"
     t.index ["paid_by_id"], name: "index_expenses_on_paid_by_id"
+  end
+
+  create_table "group_invites", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.datetime "created_at", null: false
+    t.uuid "created_by_id", null: false
+    t.datetime "expires_at"
+    t.uuid "group_id", null: false
+    t.datetime "revoked_at"
+    t.string "token", null: false
+    t.datetime "updated_at", null: false
+    t.index ["created_by_id"], name: "index_group_invites_on_created_by_id"
+    t.index ["group_id"], name: "index_group_invites_on_group_id"
+    t.index ["revoked_at"], name: "index_group_invites_on_revoked_at"
+    t.index ["token"], name: "index_group_invites_on_token", unique: true
   end
 
   create_table "group_memberships", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
@@ -102,6 +116,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_03_23_184000) do
   add_foreign_key "expense_splits", "users"
   add_foreign_key "expenses", "groups"
   add_foreign_key "expenses", "users", column: "paid_by_id"
+  add_foreign_key "group_invites", "groups"
+  add_foreign_key "group_invites", "users", column: "created_by_id"
   add_foreign_key "group_memberships", "groups"
   add_foreign_key "group_memberships", "users"
   add_foreign_key "groups", "users", column: "created_by_id"

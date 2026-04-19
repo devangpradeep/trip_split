@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import api, { groupMembersApi } from '../lib/api';
+import api, { groupInvitesApi } from '../lib/api';
 import { useAuth } from '../contexts/useAuth';
 import { ArrowLeft, Plus, Receipt, UserPlus, Pencil, Trash2, CalendarDays } from 'lucide-react';
 
@@ -39,6 +39,15 @@ const parseUIDateToISO = (displayDate) => {
   const isoDate = `${year}-${month}-${day}`;
 
   return isValidISODate(isoDate) ? isoDate : null;
+};
+
+const formatDateTimeForUI = (value) => {
+  if (!value) return '--';
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '--';
+
+  return date.toLocaleString();
 };
 
 const buildDefaultExpenseForm = (members = []) => ({
@@ -202,13 +211,19 @@ const GroupDetails = () => {
   const [group, setGroup] = useState(null);
   const [expenses, setExpenses] = useState([]);
   const [balances, setBalances] = useState([]);
+  const [invites, setInvites] = useState([]);
+  const [latestExpiredInvite, setLatestExpiredInvite] = useState(null);
   const [loading, setLoading] = useState(true);
   
   const [showAddExpense, setShowAddExpense] = useState(false);
-  const [showAddMember, setShowAddMember] = useState(false);
-  const [memberEmail, setMemberEmail] = useState('');
-  const [addingMember, setAddingMember] = useState(false);
-  const [addMemberError, setAddMemberError] = useState('');
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteExpiresHours, setInviteExpiresHours] = useState('48');
+  const [inviteNoExpiry, setInviteNoExpiry] = useState(false);
+  const [inviteError, setInviteError] = useState('');
+  const [loadingInvites, setLoadingInvites] = useState(false);
+  const [creatingInvite, setCreatingInvite] = useState(false);
+  const [revokingInviteId, setRevokingInviteId] = useState(null);
+  const [copiedInviteId, setCopiedInviteId] = useState(null);
   const [showEditExpense, setShowEditExpense] = useState(false);
   const [editingExpenseId, setEditingExpenseId] = useState(null);
   const [savingExpense, setSavingExpense] = useState(false);
@@ -424,27 +439,107 @@ const GroupDetails = () => {
     setShowAddExpense(true);
   };
 
-  const openAddMemberModal = () => {
-    setAddMemberError('');
-    setMemberEmail('');
-    setShowAddMember(true);
+  const fetchInvites = useCallback(async () => {
+    try {
+      setLoadingInvites(true);
+      const response = await groupInvitesApi.list(id);
+      const activeInvites = (response.data.invites || []).filter((invite) => invite.status === 'active');
+      setInvites(activeInvites);
+      setLatestExpiredInvite(response.data.latest_expired_invite || null);
+    } catch (error) {
+      const serverError = error.response?.data?.errors?.join(', ') || error.response?.data?.error;
+      setInviteError(serverError || 'Failed to load invite links');
+      setLatestExpiredInvite(null);
+    } finally {
+      setLoadingInvites(false);
+    }
+  }, [id]);
+
+  const openInviteModal = () => {
+    setInviteError('');
+    setInviteExpiresHours('48');
+    setInviteNoExpiry(false);
+    setCopiedInviteId(null);
+    setShowInviteModal(true);
+    fetchInvites();
   };
 
-  const handleAddMember = async (e) => {
+  const closeInviteModal = () => {
+    if (creatingInvite || revokingInviteId) return;
+    setShowInviteModal(false);
+    setInviteError('');
+    setCopiedInviteId(null);
+  };
+
+  const handleInviteModalBackdropClick = (event) => {
+    if (event.target !== event.currentTarget) return;
+    closeInviteModal();
+  };
+
+  const handleCreateInvite = async (e) => {
     e.preventDefault();
-    if (!memberEmail.trim()) return;
+    const parsedHours = Number(inviteExpiresHours);
+
+    if (!inviteNoExpiry && (!Number.isInteger(parsedHours) || parsedHours < 1 || parsedHours > 168)) {
+      setInviteError('Expiry must be between 1 and 168 hours');
+      return;
+    }
 
     try {
-      setAddingMember(true);
-      setAddMemberError('');
-      await groupMembersApi.add(id, memberEmail.trim());
-      setShowAddMember(false);
-      setMemberEmail('');
-      fetchGroupData();
+      setCreatingInvite(true);
+      setInviteError('');
+      const response = await groupInvitesApi.create(id, {
+        expiresInHours: parsedHours,
+        noExpiry: inviteNoExpiry
+      });
+      const newInvite = response.data.invite;
+      setInvites(newInvite ? [newInvite] : []);
+      setLatestExpiredInvite(null);
+      setCopiedInviteId(null);
     } catch (error) {
-      setAddMemberError(error.response?.data?.error || error.response?.data?.errors?.join(', ') || 'Failed to add member');
+      const serverError = error.response?.data?.errors?.join(', ') || error.response?.data?.error;
+      setInviteError(serverError || 'Failed to create invite link');
     } finally {
-      setAddingMember(false);
+      setCreatingInvite(false);
+    }
+  };
+
+  const handleInviteNoExpiryChange = (checked) => {
+    setInviteNoExpiry(checked);
+
+    if (checked) {
+      setInviteExpiresHours('');
+      return;
+    }
+
+    setInviteExpiresHours((prev) => (prev?.toString().trim() ? prev : '48'));
+  };
+
+  const handleRevokeInvite = async (inviteId) => {
+    try {
+      setRevokingInviteId(inviteId);
+      setInviteError('');
+      await groupInvitesApi.revoke(id, inviteId);
+      setInvites((prev) => prev.filter((invite) => invite.id !== inviteId));
+      setLatestExpiredInvite(null);
+      setCopiedInviteId((current) => (current === inviteId ? null : current));
+    } catch (error) {
+      const serverError = error.response?.data?.errors?.join(', ') || error.response?.data?.error;
+      setInviteError(serverError || 'Failed to revoke invite');
+    } finally {
+      setRevokingInviteId(null);
+    }
+  };
+
+  const handleCopyInvite = async (invite) => {
+    try {
+      await navigator.clipboard.writeText(invite.invite_url);
+      setCopiedInviteId(invite.id);
+      window.setTimeout(() => {
+        setCopiedInviteId((current) => (current === invite.id ? null : current));
+      }, 1500);
+    } catch {
+      setInviteError('Unable to copy invite link automatically');
     }
   };
 
@@ -1067,9 +1162,9 @@ const GroupDetails = () => {
               Members ({group.members.length})
               <button
                 className="btn btn-secondary"
-                onClick={openAddMemberModal}
+                onClick={openInviteModal}
                 disabled={!canManageMembers}
-                title={canManageMembers ? 'Add member' : 'Only group admin can add members'}
+                title={canManageMembers ? 'Invite member via link' : 'Only group admin can invite members'}
                 style={{ padding: '0.4rem 0.6rem', border: 'none', background: 'transparent', color: 'var(--primary-color)', opacity: canManageMembers ? 1 : 0.4, cursor: canManageMembers ? 'pointer' : 'not-allowed' }}
               >
                 <UserPlus size={18} />
@@ -1200,37 +1295,122 @@ const GroupDetails = () => {
         </div>
       )}
 
-      {showAddMember && (
-        <div className="modal-overlay">
-          <div className="glass-panel animate-fade-in modal-card" style={{ width: '100%', maxWidth: 460 }}>
-            <h3 style={{ marginBottom: '1rem' }}>Add Member</h3>
-            <form onSubmit={handleAddMember} className="flex flex-col gap-3">
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <label>Email</label>
+      {showInviteModal && (
+        <div className="modal-overlay" onClick={handleInviteModalBackdropClick}>
+          <div className="glass-panel animate-fade-in modal-card" style={{ width: '100%', maxWidth: 640, maxHeight: '90vh', overflowY: 'auto' }}>
+            <h3 style={{ marginBottom: '0.5rem' }}>Invite Members</h3>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.92rem', marginBottom: '1rem' }}>
+              Generate a shareable invite link. Any signed-in user with this active link can join this group.
+              Creating a new one will revoke the current active link.
+            </p>
+
+            <form onSubmit={handleCreateInvite} className="flex flex-col gap-3">
+              <label className="split-row">
                 <input
-                  required
-                  type="email"
-                  placeholder="friend@example.com"
-                  value={memberEmail}
-                  onChange={(e) => setMemberEmail(e.target.value)}
-                  autoFocus
+                  type="checkbox"
+                  checked={inviteNoExpiry}
+                  onChange={(e) => handleInviteNoExpiryChange(e.target.checked)}
+                  disabled={creatingInvite}
                 />
-              </div>
-              {addMemberError && <div className="error-text" style={{ margin: 0 }}>{addMemberError}</div>}
-              <div className="flex gap-3" style={{ marginTop: '0.5rem' }}>
-                <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={addingMember}>
-                  {addingMember ? 'Adding...' : 'Add Member'}
+                <span>No expiry</span>
+              </label>
+
+              {!inviteNoExpiry && (
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label>Expiry (hours)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="168"
+                    step="1"
+                    value={inviteExpiresHours}
+                    onChange={(e) => setInviteExpiresHours(e.target.value)}
+                    placeholder="48"
+                  />
+                </div>
+              )}
+
+              <div className="flex gap-3" style={{ marginTop: '0.3rem', flexWrap: 'wrap' }}>
+                <button type="submit" className="btn btn-primary" disabled={creatingInvite}>
+                  {creatingInvite ? 'Generating...' : invites.length > 0 ? 'Regenerate Invite Link' : 'Generate Invite Link'}
                 </button>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={() => setShowAddMember(false)}
-                  disabled={addingMember}
-                >
-                  Cancel
+                <button type="button" className="btn btn-secondary" onClick={closeInviteModal} disabled={creatingInvite || Boolean(revokingInviteId)}>
+                  Close
                 </button>
               </div>
             </form>
+
+            {inviteError && <div className="error-text" style={{ marginTop: '0.8rem' }}>{inviteError}</div>}
+
+            <div style={{ marginTop: '1.15rem' }}>
+              <h4 style={{ marginBottom: '0.75rem', fontSize: '1rem' }}>Active Invite Links</h4>
+
+              {loadingInvites ? (
+                <p style={{ color: 'var(--text-secondary)' }}>Loading invites...</p>
+              ) : invites.length === 0 ? (
+                latestExpiredInvite ? (
+                  <div className="glass-panel" style={{ padding: '0.9rem 1rem' }}>
+                    <div className="flex justify-between items-center" style={{ marginBottom: '0.55rem' }}>
+                      <span style={{ fontSize: '0.86rem', fontWeight: 600, textTransform: 'capitalize' }}>
+                        Status: expired
+                      </span>
+                      <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                        Expired: {formatDateTimeForUI(latestExpiredInvite.expires_at)}
+                      </span>
+                    </div>
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', margin: 0 }}>
+                      Your previous invite link has expired. Generate a new invite link to continue inviting members.
+                    </p>
+                  </div>
+                ) : (
+                  <p style={{ color: 'var(--text-secondary)' }}>No active invite link. Generate one to invite members.</p>
+                )
+              ) : (
+                <div className="flex flex-col gap-3">
+                  {invites.map((invite) => (
+                    <div key={invite.id} className="glass-panel" style={{ padding: '0.9rem 1rem' }}>
+                      <div className="flex justify-between items-center" style={{ marginBottom: '0.55rem' }}>
+                        <span style={{ fontSize: '0.86rem', fontWeight: 600, textTransform: 'capitalize' }}>
+                          Status: {invite.status}
+                        </span>
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+                          Expires: {formatDateTimeForUI(invite.expires_at)}
+                        </span>
+                      </div>
+
+                      <div className="flex gap-2 items-center" style={{ flexWrap: 'wrap' }}>
+                        <input
+                          readOnly
+                          value={invite.invite_url}
+                          style={{
+                            flex: 1,
+                            minWidth: '220px',
+                            background: 'rgba(15, 23, 42, 0.4)',
+                            border: '1px solid var(--surface-border)',
+                            borderRadius: '10px',
+                            padding: '0.62rem 0.78rem',
+                            color: 'var(--text-primary)'
+                          }}
+                        />
+                        <button type="button" className="btn btn-secondary" onClick={() => handleCopyInvite(invite)}>
+                          {copiedInviteId === invite.id ? 'Copied' : 'Copy'}
+                        </button>
+                        {invite.status === 'active' && (
+                          <button
+                            type="button"
+                            className="btn btn-danger"
+                            onClick={() => handleRevokeInvite(invite.id)}
+                            disabled={revokingInviteId === invite.id}
+                          >
+                            {revokingInviteId === invite.id ? 'Revoking...' : 'Revoke'}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

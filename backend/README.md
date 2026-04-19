@@ -10,6 +10,7 @@ Rails 8 API backend for TripSplit, providing authentication and expense-splittin
 ## Setup
 
 ```bash
+cp .env.example .env
 bundle install
 bin/rails db:prepare
 ```
@@ -24,10 +25,15 @@ Backend runs on `http://localhost:3000` by default.
 
 ## Environment Variables
 
+Local development:
+- Create `backend/.env` from `backend/.env.example`.
+- `dotenv-rails` loads values from `.env` automatically in `development` and `test`.
+
 Database (`config/database.yml`):
 - `DB_USERNAME` (default: `postgres`)
 - `DB_PASSWORD` (default: `postgres`)
 - `DB_HOST` (default: `localhost`)
+- `DATABASE_URL` (optional in local, required in production; use Neon URL on Northflank)
 
 JWT/Auth (`config/initializers/devise.rb`):
 - `DEVISE_JWT_SECRET_KEY` (set this in real environments)
@@ -37,6 +43,12 @@ Production/security:
 - `RAILS_MASTER_KEY` (required in production)
 - `FORCE_SSL` (default: `true` in production)
 - `CORS_ALLOWED_ORIGINS` (comma-separated, for example `https://app.example.com`)
+- `FRONTEND_APP_URL` (used to generate shareable invite links)
+
+Northflank + Neon deployment notes:
+- Set env vars in Northflank project settings (do not upload `.env`).
+- Point `DATABASE_URL` to your Neon connection string.
+- Ensure `RAILS_MASTER_KEY` and `DEVISE_JWT_SECRET_KEY` are both set.
 
 ## Authentication
 
@@ -61,8 +73,11 @@ Main resources:
 - `groups`
 - nested `expenses`
 - nested `settlements`
+- nested `invites` (create/list/revoke invite links)
+- `GET /api/v1/invites/:token`
+- `POST /api/v1/invites/:token/accept`
 - `GET /api/v1/groups/:group_id/balances`
 
 ## Dev Notes
-- CORS currently allows all origins in `config/initializers/cors.rb`.
+- CORS is configured via `CORS_ALLOWED_ORIGINS` in `config/initializers/cors.rb`.
 - Current app is API-only with Devise configured for JSON auth flows.

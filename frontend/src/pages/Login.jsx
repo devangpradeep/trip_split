@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/useAuth';
 
 const Login = () => {
@@ -10,6 +10,10 @@ const Login = () => {
   
   const { login } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const nextParam = searchParams.get('next');
+  const nextPath = nextParam && nextParam.startsWith('/') ? nextParam : '/';
+  const registerLink = nextParam ? `/register?next=${encodeURIComponent(nextParam)}` : '/register';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -19,7 +23,7 @@ const Login = () => {
     const result = await login(email, password);
     
     if (result.success) {
-      navigate('/');
+      navigate(nextPath);
     } else {
       setError(result.error || 'Failed to login');
       setLoading(false);
@@ -70,7 +74,7 @@ const Login = () => {
         </form>
 
         <div className="text-center" style={{ marginTop: '1.5rem', color: 'var(--text-secondary)', fontSize: '0.9rem' }}>
-          Don't have an account? <Link to="/register" style={{ color: 'var(--primary-color)', textDecoration: 'none', fontWeight: '500' }}>Sign up</Link>
+          Don't have an account? <Link to={registerLink} style={{ color: 'var(--primary-color)', textDecoration: 'none', fontWeight: '500' }}>Sign up</Link>
         </div>
       </div>
     </div>
