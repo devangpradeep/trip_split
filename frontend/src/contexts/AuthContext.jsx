@@ -58,6 +58,11 @@ export const AuthProvider = ({ children }) => {
     try {
       const response = await authApi.register({ name, email, password, phone });
       if (response.data.user) {
+        const token = response.headers?.authorization;
+        if (token) {
+          localStorage.setItem('token', token.split(' ')[1] || token);
+        }
+
         setUser(response.data.user);
         localStorage.setItem('user', JSON.stringify(response.data.user));
         return { success: true };

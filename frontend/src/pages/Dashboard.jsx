@@ -4,6 +4,13 @@ import { useAuth } from '../contexts/useAuth';
 import api from '../lib/api';
 import { LogOut, Plus, Users, ArrowRight, UserCircle } from 'lucide-react';
 
+const normalizeGroup = (payload) => payload?.group || payload?.data || payload || null;
+
+const normalizeGroups = (payload) => {
+  if (Array.isArray(payload)) return payload;
+  return payload?.groups || payload?.data || [];
+};
+
 const DashboardCustomSelect = ({ value, options, onChange, disabled = false }) => {
   const [open, setOpen] = useState(false);
   const rootRef = useRef(null);
@@ -86,9 +93,7 @@ const Dashboard = () => {
   const fetchGroups = async () => {
     try {
       const response = await api.get('/groups');
-      const data = response.data;
-      const groupsArray = Array.isArray(data) ? data : (data.groups || data.data || []);
-      setGroups(groupsArray);
+      setGroups(normalizeGroups(response.data));
     } catch (error) {
       console.error('Failed to fetch groups', error);
     } finally {
@@ -104,7 +109,17 @@ const Dashboard = () => {
       const response = await api.post('/groups', {
         group: { name: newGroupName, currency: newGroupCurrency }
       });
-      setGroups([response.data, ...groups]);
+      const createdGroup = normalizeGroup(response.data);
+
+      if (createdGroup?.id && createdGroup?.name) {
+        setGroups((prevGroups) => [
+          createdGroup,
+          ...prevGroups.filter((group) => group.id !== createdGroup.id)
+        ]);
+      } else {
+        await fetchGroups();
+      }
+
       setNewGroupName('');
       setShowAddGroup(false);
     } catch (error) {
