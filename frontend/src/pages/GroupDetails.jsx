@@ -207,6 +207,7 @@ const CustomDateInput = ({ value, onChange, required = false, disabled = false }
 const GroupDetails = () => {
   const { id } = useParams();
   const { user } = useAuth();
+  const appTitle = 'Tripsplit';
   
   const [group, setGroup] = useState(null);
   const [expenses, setExpenses] = useState([]);
@@ -274,6 +275,17 @@ const GroupDetails = () => {
   useEffect(() => {
     fetchGroupData();
   }, [fetchGroupData]);
+
+  useEffect(() => {
+    if (group?.name) {
+      document.title = `${group.name} | ${appTitle}`;
+      return () => {
+        document.title = appTitle;
+      };
+    }
+
+    document.title = appTitle;
+  }, [group, appTitle]);
 
   useEffect(() => {
     if (!showAddExpense || !group) return;
