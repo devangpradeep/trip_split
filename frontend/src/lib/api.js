@@ -5,6 +5,16 @@ const apiOrigin = (import.meta.env.VITE_API_ORIGIN || DEFAULT_API_ORIGIN).replac
 const apiPrefix = import.meta.env.VITE_API_PREFIX || '/api/v1';
 const normalizedApiPrefix = apiPrefix.startsWith('/') ? apiPrefix : `/${apiPrefix}`;
 const authBaseUrl = (import.meta.env.VITE_AUTH_BASE_URL || apiOrigin).replace(/\/+$/, '');
+export const AUTH_SESSION_EXPIRED_EVENT = 'auth:session-expired';
+
+const clearClientAuthState = () => {
+  localStorage.removeItem('token');
+  localStorage.removeItem('user');
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event(AUTH_SESSION_EXPIRED_EVENT));
+  }
+};
 
 const api = axios.create({
   baseURL: `${apiOrigin}${normalizedApiPrefix}`,
@@ -32,10 +42,7 @@ api.interceptors.response.use(
   },
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      // Uncomment when routing is ready
-      // window.location.href = '/login';
+      clearClientAuthState();
     }
     return Promise.reject(error);
   }
