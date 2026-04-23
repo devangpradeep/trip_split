@@ -730,9 +730,49 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   min-width: 0;
 }
 
+.create-group-friends-field {
+  grid-column: 1 / -1;
+  position: relative;
+}
+
+.create-group-friend-suggestions {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 0.35rem);
+  z-index: 35;
+  border-radius: 12px;
+  border: 1px solid rgba(112, 127, 255, 0.44);
+  background:
+    linear-gradient(160deg, rgba(99, 102, 241, 0.14), transparent 52%),
+    rgba(11, 20, 44, 0.96);
+  box-shadow: 0 12px 30px rgba(2, 8, 24, 0.48);
+  padding: 0.3rem;
+}
+
+.create-group-friend-suggestion-btn {
+  width: 100%;
+  border: none;
+  border-radius: 9px;
+  text-align: left;
+  font-family: inherit;
+  font-size: 0.9rem;
+  color: #dbeafe;
+  background: transparent;
+  padding: 0.48rem 0.58rem;
+  cursor: pointer;
+}
+
+.create-group-friend-suggestion-btn:hover {
+  background: rgba(99, 102, 241, 0.24);
+  color: #ffffff;
+}
+
 .create-group-actions {
+  grid-column: 1 / -1;
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 0.7rem;
 }
 
@@ -740,6 +780,33 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 .create-group-cancel-btn {
   min-height: 52px;
   white-space: nowrap;
+}
+
+.create-group-selected-friends {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.create-group-selected-friend-chip {
+  border: 1px solid rgba(99, 102, 241, 0.5);
+  background: rgba(99, 102, 241, 0.18);
+  color: #e8eeff;
+  border-radius: 999px;
+  padding: 0.3rem 0.65rem;
+  font-family: inherit;
+  font-size: 0.82rem;
+  cursor: pointer;
+}
+
+.create-group-selected-friend-chip:hover {
+  background: rgba(99, 102, 241, 0.34);
+}
+
+.create-group-error-text {
+  grid-column: 1 / -1;
+  margin: 0;
 }
 
 @media (max-width: 900px) {

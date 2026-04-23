@@ -1,10 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import api, { groupInvitesApi } from '../lib/api';
+import api, { groupInvitesApi, groupMembersApi } from '../lib/api';
 import { useAuth } from '../contexts/useAuth';
 import { ArrowLeft, Plus, Receipt, UserPlus, Pencil, Trash2, CalendarDays } from 'lucide-react';
 
 const todayISO = () => new Date().toISOString().split('T')[0];
+const FRIEND_SUGGESTION_DEBOUNCE_MS = 220;
+
+const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((email || '').trim());
 
 const isValidISODate = (value) => {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || '');
@@ -221,6 +224,13 @@ const GroupDetails = () => {
   const [inviteExpiresHours, setInviteExpiresHours] = useState('48');
   const [inviteNoExpiry, setInviteNoExpiry] = useState(false);
   const [inviteError, setInviteError] = useState('');
+  const [addMemberError, setAddMemberError] = useState('');
+  const [addMemberSuccess, setAddMemberSuccess] = useState('');
+  const [memberEmailInput, setMemberEmailInput] = useState('');
+  const [addingMember, setAddingMember] = useState(false);
+  const [friendSuggestions, setFriendSuggestions] = useState([]);
+  const [loadingFriendSuggestions, setLoadingFriendSuggestions] = useState(false);
+  const [friendSuggestionError, setFriendSuggestionError] = useState('');
   const [loadingInvites, setLoadingInvites] = useState(false);
   const [creatingInvite, setCreatingInvite] = useState(false);
   const [revokingInviteId, setRevokingInviteId] = useState(null);
@@ -467,8 +477,28 @@ const GroupDetails = () => {
     }
   }, [id]);
 
+  const fetchFriendSuggestions = useCallback(async (query = '') => {
+    try {
+      setLoadingFriendSuggestions(true);
+      setFriendSuggestionError('');
+      const response = await groupMembersApi.suggestions(id, query, 10);
+      setFriendSuggestions(response.data?.friends || []);
+    } catch (error) {
+      const serverError = error.response?.data?.errors?.join(', ') || error.response?.data?.error;
+      setFriendSuggestionError(serverError || 'Failed to load friend suggestions');
+      setFriendSuggestions([]);
+    } finally {
+      setLoadingFriendSuggestions(false);
+    }
+  }, [id]);
+
   const openInviteModal = () => {
     setInviteError('');
+    setAddMemberError('');
+    setAddMemberSuccess('');
+    setMemberEmailInput('');
+    setFriendSuggestionError('');
+    setFriendSuggestions([]);
     setInviteExpiresHours('48');
     setInviteNoExpiry(false);
     setCopiedInviteId(null);
@@ -477,11 +507,36 @@ const GroupDetails = () => {
   };
 
   const closeInviteModal = () => {
-    if (creatingInvite || revokingInviteId) return;
+    if (creatingInvite || revokingInviteId || addingMember) return;
     setShowInviteModal(false);
     setInviteError('');
+    setAddMemberError('');
+    setAddMemberSuccess('');
+    setMemberEmailInput('');
+    setFriendSuggestionError('');
+    setFriendSuggestions([]);
     setCopiedInviteId(null);
   };
+
+  useEffect(() => {
+    if (!showInviteModal) return;
+
+    const query = memberEmailInput.trim();
+    if (!query) {
+      setFriendSuggestions([]);
+      setFriendSuggestionError('');
+      setLoadingFriendSuggestions(false);
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      fetchFriendSuggestions(query);
+    }, FRIEND_SUGGESTION_DEBOUNCE_MS);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [showInviteModal, memberEmailInput, fetchFriendSuggestions]);
 
   const handleInviteModalBackdropClick = (event) => {
     if (event.target !== event.currentTarget) return;
@@ -552,6 +607,67 @@ const GroupDetails = () => {
       }, 1500);
     } catch {
       setInviteError('Unable to copy invite link automatically');
+    }
+  };
+
+  const handleAddMember = async (event, emailOverride = null) => {
+    if (event) {
+      event.preventDefault();
+    }
+
+    const normalizedEmail = (emailOverride ?? memberEmailInput).trim().toLowerCase();
+    if (!normalizedEmail) {
+      setAddMemberError('Please enter an email address');
+      setAddMemberSuccess('');
+      return;
+    }
+
+    if (!isValidEmail(normalizedEmail)) {
+      setAddMemberError('Please enter a valid email address');
+      setAddMemberSuccess('');
+      return;
+    }
+
+    const isAlreadyMember = group.members.some(
+      (member) => member.email?.toLowerCase() === normalizedEmail
+    );
+    if (isAlreadyMember) {
+      setAddMemberError('This user is already a member of this group');
+      setAddMemberSuccess('');
+      return;
+    }
+
+    try {
+      setAddingMember(true);
+      setAddMemberError('');
+      setAddMemberSuccess('');
+
+      const response = await groupMembersApi.add(id, normalizedEmail);
+      const member = response.data?.member;
+
+      if (member?.id) {
+        setGroup((prevGroup) => {
+          if (!prevGroup) return prevGroup;
+
+          const alreadyExists = prevGroup.members.some((existingMember) => existingMember.id === member.id);
+          if (alreadyExists) return prevGroup;
+
+          return {
+            ...prevGroup,
+            members: [...prevGroup.members, member]
+          };
+        });
+      }
+
+      setMemberEmailInput('');
+      setAddMemberSuccess(member?.name ? `${member.name} added to the group` : 'Member added successfully');
+      setFriendSuggestions([]);
+    } catch (error) {
+      const serverError = error.response?.data?.errors?.join(', ') || error.response?.data?.error;
+      setAddMemberError(serverError || 'Failed to add member');
+      setAddMemberSuccess('');
+    } finally {
+      setAddingMember(false);
     }
   };
 
@@ -799,6 +915,13 @@ const GroupDetails = () => {
     ...group.members.filter((member) => member.id !== user.id),
     ...group.members.filter((member) => member.id === user.id)
   ];
+  const existingMemberEmails = new Set(
+    group.members.map((member) => member.email?.trim().toLowerCase()).filter(Boolean)
+  );
+  const filteredFriendSuggestions = friendSuggestions.filter((person) => {
+    if (!person.email) return false;
+    return !existingMemberEmails.has(person.email.toLowerCase());
+  });
   const currentUserBalanceEntry = balances.find((entry) => entry.user.id === user.id);
   const currentUserDebt = Math.max(0, -(parseFloat(currentUserBalanceEntry?.balance || 0)));
   const settlementCandidates = balances
@@ -1312,10 +1435,87 @@ const GroupDetails = () => {
           <div className="glass-panel animate-fade-in modal-card" style={{ width: '100%', maxWidth: 640, maxHeight: '90vh', overflowY: 'auto' }}>
             <h3 style={{ marginBottom: '0.5rem' }}>Invite Members</h3>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.92rem', marginBottom: '1rem' }}>
-              Generate a shareable invite link. Any signed-in user with this active link can join this group.
-              Creating a new one will revoke the current active link.
+              Type a name to search people you already traveled with, then add them to this group.
             </p>
 
+            <div className="glass-panel" style={{ padding: '0.95rem 1rem', marginBottom: '1rem' }}>
+              <h4 style={{ marginBottom: '0.6rem', fontSize: '1rem' }}>Add Friends</h4>
+              <form onSubmit={handleAddMember} autoComplete="off" className="flex gap-2 items-center" style={{ flexWrap: 'wrap' }}>
+                <input
+                  type="text"
+                  name="friend_search"
+                  value={memberEmailInput}
+                  onChange={(e) => setMemberEmailInput(e.target.value)}
+                  placeholder="Type name or email (e.g., Test)"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  autoCapitalize="none"
+                  spellCheck={false}
+                  inputMode="search"
+                  data-lpignore="true"
+                  data-1p-ignore="true"
+                  data-bwignore="true"
+                  data-form-type="other"
+                  style={{
+                    flex: 1,
+                    minWidth: '230px',
+                    background: 'rgba(15, 23, 42, 0.4)',
+                    border: '1px solid var(--surface-border)',
+                    borderRadius: '10px',
+                    padding: '0.62rem 0.78rem',
+                    color: 'var(--text-primary)'
+                  }}
+                  disabled={addingMember}
+                />
+                <button type="submit" className="btn btn-primary" disabled={addingMember}>
+                  {addingMember ? 'Adding...' : 'Add Member'}
+                </button>
+              </form>
+
+              {loadingFriendSuggestions ? (
+                <p style={{ color: 'var(--text-secondary)', fontSize: '0.86rem', marginTop: '0.7rem' }}>
+                  Searching friends...
+                </p>
+              ) : filteredFriendSuggestions.length > 0 ? (
+                <div style={{ marginTop: '0.75rem' }}>
+                  <div style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '0.45rem' }}>
+                    Friend suggestions
+                  </div>
+                  <div className="flex gap-2" style={{ flexWrap: 'wrap' }}>
+                    {filteredFriendSuggestions.map((person) => (
+                      <button
+                        key={person.id || person.email}
+                        type="button"
+                        className="btn btn-secondary"
+                        style={{ padding: '0.4rem 0.65rem', fontSize: '0.82rem' }}
+                        onClick={(event) => handleAddMember(event, person.email)}
+                        disabled={addingMember}
+                        title={person.email}
+                      >
+                        {person.name ? `${person.name} (${person.email})` : person.email}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                memberEmailInput.trim() && (
+                  <p style={{ color: 'var(--text-secondary)', fontSize: '0.86rem', marginTop: '0.7rem' }}>
+                    No matching friends found for this search.
+                  </p>
+                )
+              )}
+
+              {addMemberError && <div className="error-text" style={{ marginTop: '0.7rem' }}>{addMemberError}</div>}
+              {addMemberSuccess && <div style={{ marginTop: '0.7rem', color: 'var(--success-color)', fontSize: '0.9rem' }}>{addMemberSuccess}</div>}
+              {friendSuggestionError && <div className="error-text" style={{ marginTop: '0.7rem' }}>{friendSuggestionError}</div>}
+            </div>
+
+            <div style={{ borderTop: '1px solid var(--surface-border)', margin: '0 0 1rem', opacity: 0.65 }} />
+
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '0.85rem' }}>
+              Invite link mode: any signed-in user with an active link can join this group.
+              Generating a new link revokes the previous active link.
+            </p>
             <form onSubmit={handleCreateInvite} className="flex flex-col gap-3">
               <label className="split-row">
                 <input
@@ -1346,7 +1546,7 @@ const GroupDetails = () => {
                 <button type="submit" className="btn btn-primary" disabled={creatingInvite}>
                   {creatingInvite ? 'Generating...' : invites.length > 0 ? 'Regenerate Invite Link' : 'Generate Invite Link'}
                 </button>
-                <button type="button" className="btn btn-secondary" onClick={closeInviteModal} disabled={creatingInvite || Boolean(revokingInviteId)}>
+                <button type="button" className="btn btn-secondary" onClick={closeInviteModal} disabled={creatingInvite || Boolean(revokingInviteId) || addingMember}>
                   Close
                 </button>
               </div>

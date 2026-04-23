@@ -16,7 +16,11 @@ Rails.application.routes.draw do
       resources :groups do
         resources :expenses, only: %i[index create show update destroy]
         resources :settlements, only: %i[index create show destroy]
-        resources :members, controller: 'group_members', only: [:create]
+        resources :members, controller: 'group_members', only: [:create] do
+          collection do
+            get :suggestions
+          end
+        end
         resources :invites, controller: 'group_invites', only: %i[index create destroy]
         get 'balances', to: 'balances#index'
       end

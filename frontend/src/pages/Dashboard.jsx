@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/useAuth';
-import api from '../lib/api';
+import api, { groupMembersApi } from '../lib/api';
 import { LogOut, Plus, Users, ArrowRight, UserCircle } from 'lucide-react';
 
 const DashboardCustomSelect = ({ value, options, onChange, disabled = false }) => {
@@ -73,6 +73,10 @@ const Dashboard = () => {
   const [showAddGroup, setShowAddGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupCurrency, setNewGroupCurrency] = useState('INR');
+  const [newGroupFriendQuery, setNewGroupFriendQuery] = useState('');
+  const [selectedNewGroupFriends, setSelectedNewGroupFriends] = useState([]);
+  const [creatingGroup, setCreatingGroup] = useState(false);
+  const [createGroupError, setCreateGroupError] = useState('');
   const currencyOptions = [
     { value: 'INR', label: 'INR (₹)' },
     { value: 'USD', label: 'USD ($)' },
@@ -82,6 +86,42 @@ const Dashboard = () => {
   useEffect(() => {
     fetchGroups();
   }, []);
+
+  const uniqueFriendCandidates = Object.values(
+    groups
+      .flatMap((group) => group.members || [])
+      .reduce((accumulator, member) => {
+        const email = (member?.email || '').trim().toLowerCase();
+        if (!email) return accumulator;
+        if (member.id === user?.id) return accumulator;
+
+        if (!accumulator[email]) {
+          accumulator[email] = {
+            id: member.id,
+            name: member.name,
+            email
+          };
+        }
+
+        return accumulator;
+      }, {})
+  );
+
+  const selectedFriendEmailSet = new Set(
+    selectedNewGroupFriends.map((friend) => friend.email)
+  );
+
+  const filteredFriendSuggestions = uniqueFriendCandidates.filter((friend) => {
+    if (selectedFriendEmailSet.has(friend.email)) return false;
+
+    const query = newGroupFriendQuery.trim().toLowerCase();
+    if (!query) return false;
+
+    return (
+      friend.name?.toLowerCase().includes(query) ||
+      friend.email.toLowerCase().includes(query)
+    );
+  }).slice(0, 8);
 
   const fetchGroups = async () => {
     try {
@@ -101,15 +141,52 @@ const Dashboard = () => {
     if (!newGroupName.trim()) return;
 
     try {
+      setCreatingGroup(true);
+      setCreateGroupError('');
       const response = await api.post('/groups', {
         group: { name: newGroupName, currency: newGroupCurrency }
       });
-      setGroups([response.data, ...groups]);
+
+      const createdGroup = response.data?.group || response.data?.data || response.data;
+      if (!createdGroup?.id) {
+        throw new Error('Group created but response is missing group id');
+      }
+
+      if (selectedNewGroupFriends.length > 0) {
+        const addMemberResults = await Promise.allSettled(
+          selectedNewGroupFriends.map((friend) => groupMembersApi.add(createdGroup.id, friend.email))
+        );
+
+        const failedAdds = addMemberResults.filter((result) => result.status === 'rejected');
+        if (failedAdds.length > 0) {
+          setCreateGroupError('Group created, but some friends could not be added.');
+        }
+      }
+
+      await fetchGroups();
       setNewGroupName('');
+      setNewGroupFriendQuery('');
+      setSelectedNewGroupFriends([]);
       setShowAddGroup(false);
     } catch (error) {
       console.error('Failed to create group', error);
+      const serverError = error.response?.data?.errors?.join(', ') || error.response?.data?.error;
+      setCreateGroupError(serverError || 'Failed to create group');
+    } finally {
+      setCreatingGroup(false);
     }
+  };
+
+  const handleAddFriendSelection = (friend) => {
+    if (!friend?.email) return;
+    if (selectedFriendEmailSet.has(friend.email)) return;
+
+    setSelectedNewGroupFriends((prev) => [...prev, friend]);
+    setNewGroupFriendQuery('');
+  };
+
+  const handleRemoveSelectedFriend = (email) => {
+    setSelectedNewGroupFriends((prev) => prev.filter((friend) => friend.email !== email));
   };
 
   return (
@@ -160,16 +237,76 @@ const Dashboard = () => {
                 onChange={setNewGroupCurrency}
               />
             </div>
+            <div className="form-group create-group-friends-field" style={{ margin: 0 }}>
+              <label style={{ marginBottom: '0.35rem' }}>Add friends (optional)</label>
+              <input
+                type="text"
+                name="create_group_friend_search"
+                value={newGroupFriendQuery}
+                onChange={(e) => setNewGroupFriendQuery(e.target.value)}
+                placeholder="Type a name (e.g., Test)"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="none"
+                spellCheck={false}
+                inputMode="search"
+                data-lpignore="true"
+                data-1p-ignore="true"
+                data-bwignore="true"
+                data-form-type="other"
+              />
+              {newGroupFriendQuery.trim() && filteredFriendSuggestions.length > 0 && (
+                <div className="create-group-friend-suggestions">
+                  {filteredFriendSuggestions.map((friend) => (
+                    <button
+                      key={friend.email}
+                      type="button"
+                      className="create-group-friend-suggestion-btn"
+                      onClick={() => handleAddFriendSelection(friend)}
+                    >
+                      {friend.name} ({friend.email})
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <div className="create-group-actions">
-              <button type="submit" className="btn btn-primary create-group-submit-btn">Create</button>
+              <button type="submit" className="btn btn-primary create-group-submit-btn" disabled={creatingGroup}>
+                {creatingGroup ? 'Creating...' : 'Create'}
+              </button>
               <button
                 type="button"
                 className="btn btn-secondary create-group-cancel-btn"
-                onClick={() => setShowAddGroup(false)}
+                onClick={() => {
+                  if (creatingGroup) return;
+                  setShowAddGroup(false);
+                  setCreateGroupError('');
+                  setNewGroupFriendQuery('');
+                  setSelectedNewGroupFriends([]);
+                }}
+                disabled={creatingGroup}
               >
                 Cancel
               </button>
             </div>
+            {selectedNewGroupFriends.length > 0 && (
+              <div className="create-group-selected-friends">
+                {selectedNewGroupFriends.map((friend) => (
+                  <button
+                    key={friend.email}
+                    type="button"
+                    className="create-group-selected-friend-chip"
+                    onClick={() => handleRemoveSelectedFriend(friend.email)}
+                    title="Remove friend"
+                  >
+                    {friend.name} ×
+                  </button>
+                ))}
+              </div>
+            )}
+            {createGroupError && (
+              <div className="error-text create-group-error-text">{createGroupError}</div>
+            )}
           </form>
         </div>
       )}
