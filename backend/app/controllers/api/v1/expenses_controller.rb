@@ -22,9 +22,9 @@ module Api
       def create
         @expense = @group.expenses.build(expense_params)
         @expense.split_type = normalized_split_type
-        @expense.paid_by ||= current_user
 
         begin
+          assign_paid_by!
           ActiveRecord::Base.transaction do
             @expense.save!
             replace_splits!(@expense)
@@ -46,6 +46,7 @@ module Api
         @expense.split_type = normalized_split_type
 
         begin
+          assign_paid_by!
           ActiveRecord::Base.transaction do
             @expense.save!
             replace_splits!(@expense)
@@ -85,6 +86,37 @@ module Api
         return if @group.group_memberships.exists?(user_id: current_user.id, role: 'admin')
 
         render json: { error: 'Only group admins or the expense payer can delete this expense' }, status: :forbidden
+      end
+
+      def group_admin?
+        @group.group_memberships.exists?(user_id: current_user.id, role: 'admin')
+      end
+
+      def requested_paid_by_id
+        params.dig(:expense, :paid_by_id).presence
+      end
+
+      def assign_paid_by!
+        requested_id = requested_paid_by_id
+
+        if group_admin?
+          @expense.paid_by = find_group_member!(requested_id) if requested_id
+          @expense.paid_by ||= current_user
+          return
+        end
+
+        if requested_id.present? && requested_id != current_user.id
+          raise SplitValidationError, 'Only group admins can choose another payer'
+        end
+
+        @expense.paid_by = current_user if @expense.new_record?
+      end
+
+      def find_group_member!(user_id)
+        member = @group.members.find_by(id: user_id)
+        raise SplitValidationError, 'Payer must be a member of this group' unless member
+
+        member
       end
 
       def normalized_split_type
@@ -212,7 +244,7 @@ module Api
       end
 
       def expense_params
-        params.require(:expense).permit(:description, :amount, :currency, :split_type, :date, :category, :paid_by_id)
+        params.require(:expense).permit(:description, :amount, :currency, :split_type, :date, :category)
       end
     end
   end

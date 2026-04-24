@@ -14,9 +14,7 @@ module Api
 
       def show
         render json: @group, include: {
-          members: { only: %i[id name email avatar_url] },
-          expenses: { include: %i[paid_by expense_splits] },
-          settlements: { include: %i[from_user to_user] }
+          members: { only: %i[id name email avatar_url] }
         }
       end
 
@@ -24,12 +22,14 @@ module Api
         @group = Group.new(group_params)
         @group.created_by = current_user
 
-        if @group.save
-          @group.group_memberships.create(user: current_user, role: 'admin')
-          render json: @group, status: :created
-        else
-          render json: @group.errors, status: :unprocessable_entity
+        ActiveRecord::Base.transaction do
+          @group.save!
+          @group.group_memberships.create!(user: current_user, role: 'admin')
         end
+
+        render json: @group, status: :created
+      rescue ActiveRecord::RecordInvalid => e
+        render json: e.record.errors, status: :unprocessable_entity
       end
 
       def update
