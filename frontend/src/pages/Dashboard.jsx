@@ -220,7 +220,13 @@ const Dashboard = () => {
       {showAddGroup && (
         <div className="glass-panel animate-fade-in" style={{ marginBottom: '2rem' }}>
           <h3 style={{ marginBottom: '1rem', fontSize: '1.2rem' }}>Create New Group</h3>
-          <form onSubmit={handleCreateGroup} className="create-group-form">
+          <form
+            onSubmit={handleCreateGroup}
+            autoComplete="off"
+            data-lpignore="true"
+            data-form-type="other"
+            className="create-group-form"
+          >
             <div className="form-group create-group-name-field" style={{ margin: 0 }}>
               <input 
                 type="text" 
@@ -240,12 +246,12 @@ const Dashboard = () => {
             <div className="form-group create-group-friends-field" style={{ margin: 0 }}>
               <label style={{ marginBottom: '0.35rem' }}>Add friends (optional)</label>
               <input
-                type="text"
-                name="create_group_friend_search"
+                type="search"
+                name="create_group_friend_lookup"
                 value={newGroupFriendQuery}
                 onChange={(e) => setNewGroupFriendQuery(e.target.value)}
                 placeholder="Type a name (e.g., Test)"
-                autoComplete="off"
+                autoComplete="new-password"
                 autoCorrect="off"
                 autoCapitalize="none"
                 spellCheck={false}

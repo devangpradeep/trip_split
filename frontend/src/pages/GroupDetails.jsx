@@ -227,6 +227,7 @@ const GroupDetails = () => {
   const [addMemberError, setAddMemberError] = useState('');
   const [addMemberSuccess, setAddMemberSuccess] = useState('');
   const [memberEmailInput, setMemberEmailInput] = useState('');
+  const [selectedSuggestedFriend, setSelectedSuggestedFriend] = useState(null);
   const [addingMember, setAddingMember] = useState(false);
   const [friendSuggestions, setFriendSuggestions] = useState([]);
   const [loadingFriendSuggestions, setLoadingFriendSuggestions] = useState(false);
@@ -497,6 +498,7 @@ const GroupDetails = () => {
     setAddMemberError('');
     setAddMemberSuccess('');
     setMemberEmailInput('');
+    setSelectedSuggestedFriend(null);
     setFriendSuggestionError('');
     setFriendSuggestions([]);
     setInviteExpiresHours('48');
@@ -513,6 +515,7 @@ const GroupDetails = () => {
     setAddMemberError('');
     setAddMemberSuccess('');
     setMemberEmailInput('');
+    setSelectedSuggestedFriend(null);
     setFriendSuggestionError('');
     setFriendSuggestions([]);
     setCopiedInviteId(null);
@@ -522,6 +525,20 @@ const GroupDetails = () => {
     if (!showInviteModal) return;
 
     const query = memberEmailInput.trim();
+    const normalizedQuery = query.toLowerCase();
+
+    if (selectedSuggestedFriend) {
+      const selectedName = (selectedSuggestedFriend.name || '').trim().toLowerCase();
+      const selectedEmail = (selectedSuggestedFriend.email || '').trim().toLowerCase();
+
+      if (normalizedQuery === selectedName || normalizedQuery === selectedEmail) {
+        setFriendSuggestions([]);
+        setFriendSuggestionError('');
+        setLoadingFriendSuggestions(false);
+        return;
+      }
+    }
+
     if (!query) {
       setFriendSuggestions([]);
       setFriendSuggestionError('');
@@ -536,7 +553,7 @@ const GroupDetails = () => {
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [showInviteModal, memberEmailInput, fetchFriendSuggestions]);
+  }, [showInviteModal, memberEmailInput, selectedSuggestedFriend, fetchFriendSuggestions]);
 
   const handleInviteModalBackdropClick = (event) => {
     if (event.target !== event.currentTarget) return;
@@ -610,20 +627,30 @@ const GroupDetails = () => {
     }
   };
 
-  const handleAddMember = async (event, emailOverride = null) => {
+  const handleSelectSuggestedFriend = (friend) => {
+    if (!friend?.email) return;
+
+    setSelectedSuggestedFriend(friend);
+    setMemberEmailInput(friend.name || friend.email);
+    setFriendSuggestions([]);
+    setAddMemberError('');
+    setAddMemberSuccess('');
+  };
+
+  const handleAddMember = async (event) => {
     if (event) {
       event.preventDefault();
     }
 
-    const normalizedEmail = (emailOverride ?? memberEmailInput).trim().toLowerCase();
+    const normalizedEmail = (selectedSuggestedFriend?.email || memberEmailInput).trim().toLowerCase();
     if (!normalizedEmail) {
-      setAddMemberError('Please enter an email address');
+      setAddMemberError('Type a name and select a user, or enter an email address');
       setAddMemberSuccess('');
       return;
     }
 
     if (!isValidEmail(normalizedEmail)) {
-      setAddMemberError('Please enter a valid email address');
+      setAddMemberError('Select a user from suggestions or enter a valid email address');
       setAddMemberSuccess('');
       return;
     }
@@ -660,6 +687,7 @@ const GroupDetails = () => {
       }
 
       setMemberEmailInput('');
+      setSelectedSuggestedFriend(null);
       setAddMemberSuccess(member?.name ? `${member.name} added to the group` : 'Member added successfully');
       setFriendSuggestions([]);
     } catch (error) {
@@ -1440,14 +1468,25 @@ const GroupDetails = () => {
 
             <div className="glass-panel" style={{ padding: '0.95rem 1rem', marginBottom: '1rem' }}>
               <h4 style={{ marginBottom: '0.6rem', fontSize: '1rem' }}>Add Friends</h4>
-              <form onSubmit={handleAddMember} autoComplete="off" className="flex gap-2 items-center" style={{ flexWrap: 'wrap' }}>
+              <form
+                onSubmit={handleAddMember}
+                autoComplete="off"
+                data-lpignore="true"
+                data-form-type="other"
+                className="flex gap-2 items-center"
+                style={{ flexWrap: 'wrap' }}
+              >
                 <input
-                  type="text"
-                  name="friend_search"
+                  type="search"
+                  name="friend_lookup_query"
                   value={memberEmailInput}
-                  onChange={(e) => setMemberEmailInput(e.target.value)}
-                  placeholder="Type name or email (e.g., Test)"
-                  autoComplete="off"
+                  onChange={(e) => {
+                    setMemberEmailInput(e.target.value);
+                    setSelectedSuggestedFriend(null);
+                    setAddMemberError('');
+                  }}
+                  placeholder="Type a name (e.g., Test)"
+                  autoComplete="new-password"
                   autoCorrect="off"
                   autoCapitalize="none"
                   spellCheck={false}
@@ -1472,6 +1511,13 @@ const GroupDetails = () => {
                 </button>
               </form>
 
+              {selectedSuggestedFriend && (
+                <div style={{ marginTop: '0.55rem', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+                  Selected: <span style={{ color: 'var(--text-primary)' }}>{selectedSuggestedFriend.name || selectedSuggestedFriend.email}</span>
+                  <span style={{ marginLeft: '0.35rem' }}>({selectedSuggestedFriend.email})</span>
+                </div>
+              )}
+
               {loadingFriendSuggestions ? (
                 <p style={{ color: 'var(--text-secondary)', fontSize: '0.86rem', marginTop: '0.7rem' }}>
                   Searching friends...
@@ -1488,7 +1534,7 @@ const GroupDetails = () => {
                         type="button"
                         className="btn btn-secondary"
                         style={{ padding: '0.4rem 0.65rem', fontSize: '0.82rem' }}
-                        onClick={(event) => handleAddMember(event, person.email)}
+                        onClick={() => handleSelectSuggestedFriend(person)}
                         disabled={addingMember}
                         title={person.email}
                       >
@@ -1498,7 +1544,7 @@ const GroupDetails = () => {
                   </div>
                 </div>
               ) : (
-                memberEmailInput.trim() && (
+                memberEmailInput.trim() && !selectedSuggestedFriend && (
                   <p style={{ color: 'var(--text-secondary)', fontSize: '0.86rem', marginTop: '0.7rem' }}>
                     No matching friends found for this search.
                   </p>
