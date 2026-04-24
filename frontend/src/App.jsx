@@ -1,4 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { Analytics } from '@vercel/analytics/react';
 import { AuthProvider } from './contexts/AuthContext';
 import { useAuth } from './contexts/useAuth';
 import Login from './pages/Login';
@@ -55,6 +56,7 @@ const App = () => {
       <Router>
         <AppRoutes />
         <InstallPrompt />
+        <Analytics />
       </Router>
     </AuthProvider>
   );
