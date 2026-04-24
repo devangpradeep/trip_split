@@ -152,21 +152,15 @@ const Dashboard = () => {
         group: { name: newGroupName, currency: newGroupCurrency }
       });
       const createdGroup = normalizeGroup(response.data);
-
-      if (createdGroup?.id && createdGroup?.name) {
-        setGroups((prevGroups) => [
-          createdGroup,
-          ...prevGroups.filter((group) => group.id !== createdGroup.id)
-        ]);
-      } else {
-        await fetchGroups();
-      }
-
-
-      const createdGroup = response.data?.group || response.data?.data || response.data;
       if (!createdGroup?.id) {
         throw new Error('Group created but response is missing group id');
       }
+
+      // Optimistic insert so the new group appears immediately.
+      setGroups((prevGroups) => [
+        createdGroup,
+        ...prevGroups.filter((group) => group.id !== createdGroup.id)
+      ]);
 
       if (selectedNewGroupFriends.length > 0) {
         const addMemberResults = await Promise.allSettled(
