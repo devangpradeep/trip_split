@@ -6,6 +6,7 @@ import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import GroupDetails from './pages/GroupDetails';
 import JoinGroup from './pages/JoinGroup';
+import InstallPrompt from './components/InstallPrompt';
 
 // Protected Route Wrapper
 const ProtectedRoute = ({ children }) => {
@@ -53,6 +54,7 @@ const App = () => {
     <AuthProvider>
       <Router>
         <AppRoutes />
+        <InstallPrompt />
       </Router>
     </AuthProvider>
   );
