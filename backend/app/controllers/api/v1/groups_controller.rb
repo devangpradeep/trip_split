@@ -9,7 +9,7 @@ module Api
 
       def index
         @groups = current_user.groups.includes(:members)
-        render json: @groups, include: { members: { only: %i[id name avatar_url] } }
+        render json: @groups, include: { members: { only: %i[id name email avatar_url] } }
       end
 
       def show

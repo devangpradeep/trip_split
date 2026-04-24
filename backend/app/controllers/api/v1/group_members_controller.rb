@@ -7,6 +7,39 @@ module Api
       before_action :set_group
       before_action :ensure_admin!
 
+      def suggestions
+        shared_group_ids = current_user.group_ids
+        query = suggestions_params[:q].to_s.strip.downcase
+
+        friends = User.joins(:group_memberships)
+                      .where(group_memberships: { group_id: shared_group_ids })
+                      .where.not(id: current_user.id)
+                      .where.not(id: @group.members.select(:id))
+                      .distinct
+
+        if query.present?
+          escaped_query = ActiveRecord::Base.sanitize_sql_like(query)
+          pattern = "%#{escaped_query}%"
+          friends = friends.where(
+            'LOWER(users.name) LIKE :pattern OR LOWER(users.email) LIKE :pattern',
+            pattern: pattern
+          )
+        end
+
+        friends = friends.order(:name, :email).limit(suggestion_limit)
+
+        render json: {
+          friends: friends.map do |friend|
+            {
+              id: friend.id,
+              name: friend.name,
+              email: friend.email,
+              avatar_url: friend.avatar_url
+            }
+          end
+        }
+      end
+
       def create
         user = User.find_by(email: member_params[:email].to_s.strip.downcase)
         return render json: { error: 'User not found' }, status: :not_found unless user
@@ -48,6 +81,17 @@ module Api
 
       def member_params
         params.require(:member).permit(:email)
+      end
+
+      def suggestions_params
+        params.permit(:q, :limit)
+      end
+
+      def suggestion_limit
+        requested_limit = suggestions_params[:limit].to_i
+        return 10 unless requested_limit.positive?
+
+        [requested_limit, 20].min
       end
     end
   end

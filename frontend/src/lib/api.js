@@ -59,6 +59,12 @@ export const authApi = {
 export const groupMembersApi = {
   add: (groupId, email) => api.post(`/groups/${groupId}/members`, {
     member: { email }
+  }),
+  suggestions: (groupId, query = '', limit = 10) => api.get(`/groups/${groupId}/members/suggestions`, {
+    params: {
+      ...(query ? { q: query } : {}),
+      limit
+    }
   })
 };
 
