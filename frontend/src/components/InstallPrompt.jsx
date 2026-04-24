@@ -13,38 +13,45 @@ const isIosSafari = () => {
   return isIos && isWebkit && !isCriOS;
 };
 
+const getInitialPromptState = () => {
+  if (typeof window === 'undefined') {
+    return { showPrompt: false, iosMode: false };
+  }
+
+  const dismissed = window.sessionStorage.getItem(INSTALL_PROMPT_DISMISSED_KEY) === 'true';
+  const standalone = isStandaloneMode();
+  const ios = isIosSafari();
+
+  return {
+    showPrompt: !dismissed && !standalone && ios,
+    iosMode: !dismissed && !standalone && ios
+  };
+};
+
 const InstallPrompt = () => {
   const [deferredPrompt, setDeferredPrompt] = useState(null);
-  const [showPrompt, setShowPrompt] = useState(false);
-  const [iosMode, setIosMode] = useState(false);
+  const [promptState, setPromptState] = useState(getInitialPromptState);
+  const { showPrompt, iosMode } = promptState;
 
   useEffect(() => {
     if (typeof window === 'undefined') return undefined;
 
     const dismissed = window.sessionStorage.getItem(INSTALL_PROMPT_DISMISSED_KEY) === 'true';
     const standalone = isStandaloneMode();
-    const ios = isIosSafari();
 
     document.body.classList.toggle('app-installed', standalone);
-
-    if (!dismissed && !standalone && ios) {
-      setIosMode(true);
-      setShowPrompt(true);
-    }
 
     const handleBeforeInstallPrompt = (event) => {
       event.preventDefault();
       if (dismissed || isStandaloneMode()) return;
 
-      setIosMode(false);
       setDeferredPrompt(event);
-      setShowPrompt(true);
+      setPromptState({ showPrompt: true, iosMode: false });
     };
 
     const handleInstalled = () => {
       setDeferredPrompt(null);
-      setShowPrompt(false);
-      setIosMode(false);
+      setPromptState({ showPrompt: false, iosMode: false });
       document.body.classList.add('app-installed');
     };
 
@@ -59,7 +66,7 @@ const InstallPrompt = () => {
 
   const dismissPrompt = () => {
     window.sessionStorage.setItem(INSTALL_PROMPT_DISMISSED_KEY, 'true');
-    setShowPrompt(false);
+    setPromptState((current) => ({ ...current, showPrompt: false }));
   };
 
   const handleInstall = async () => {
@@ -69,12 +76,12 @@ const InstallPrompt = () => {
     const choice = await deferredPrompt.userChoice;
 
     if (choice?.outcome !== 'accepted') {
-      setShowPrompt(true);
+      setPromptState((current) => ({ ...current, showPrompt: true }));
       return;
     }
 
     setDeferredPrompt(null);
-    setShowPrompt(false);
+    setPromptState((current) => ({ ...current, showPrompt: false }));
   };
 
   if (!showPrompt) return null;
