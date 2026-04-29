@@ -794,6 +794,115 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   gap: 1rem;
 }
 
+.dashboard-groups-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.group-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 1.5rem;
+}
+
+.group-card-link {
+  text-decoration: none;
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+  min-height: 180px;
+}
+
+.group-card-description {
+  line-height: 1.45;
+  margin-bottom: 1rem;
+}
+
+.group-card-footer {
+  margin-top: auto;
+  padding-top: 1rem;
+  border-top: 1px solid var(--surface-border);
+}
+
+.currency-badge {
+  background: var(--primary-light);
+  color: var(--primary-color);
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.archive-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  width: fit-content;
+  margin-top: 0.45rem;
+  border-radius: 999px;
+  border: 1px solid rgba(245, 158, 11, 0.36);
+  background: rgba(245, 158, 11, 0.12);
+  color: #fbbf24;
+  padding: 0.24rem 0.55rem;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.archived-groups-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  border-radius: 16px;
+  background: rgba(15, 23, 42, 0.24);
+  overflow: hidden;
+}
+
+.archived-groups-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: inherit;
+  padding: 0.9rem 1rem;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.archived-groups-toggle:hover {
+  background: rgba(30, 41, 59, 0.36);
+}
+
+.archived-groups-section > .group-card-grid {
+  padding: 1rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.14);
+}
+
+.archived-groups-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  color: var(--text-primary);
+}
+
+.archived-groups-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.45rem;
+  height: 1.45rem;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.14);
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
 .create-group-form {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 128px auto;
@@ -940,6 +1049,40 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 }
 
 /* Group details responsive */
+.group-header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.group-title-line {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  flex-wrap: wrap;
+}
+
+.group-title-line .archive-status-badge {
+  margin-top: 0;
+}
+
+.group-settings-btn {
+  flex-shrink: 0;
+}
+
+.archived-group-banner {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.8rem;
+  padding: 1rem 1.2rem;
+  border-color: rgba(245, 158, 11, 0.22);
+}
+
+.archived-group-banner p {
+  margin-top: 0.2rem;
+}
+
 .group-details-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 350px;
@@ -974,6 +1117,75 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 .expense-form-fields-row {
   display: flex;
   gap: 0.75rem;
+}
+
+.group-settings-modal {
+  width: 100%;
+  max-width: 560px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.group-settings-modal-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.group-settings-modal-header .archive-status-badge {
+  margin-top: 0;
+  flex-shrink: 0;
+}
+
+.settings-help-text {
+  color: var(--text-secondary);
+  font-size: 0.84rem;
+  line-height: 1.4;
+}
+
+.settings-divider {
+  border-top: 1px solid var(--surface-border);
+  margin: 1.2rem 0;
+}
+
+.settings-lifecycle-section,
+.settings-danger-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.settings-lifecycle-section p,
+.settings-danger-section p {
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.settings-warning {
+  border-radius: 10px;
+  border: 1px solid rgba(245, 158, 11, 0.26);
+  background: rgba(245, 158, 11, 0.1);
+  color: #fbbf24;
+  padding: 0.65rem 0.75rem;
+  font-size: 0.88rem;
+}
+
+.settings-danger-section {
+  border-radius: 14px;
+  border: 1px solid rgba(239, 68, 68, 0.22);
+  background: rgba(239, 68, 68, 0.07);
+  padding: 1rem;
+}
+
+.settings-danger-section p {
+  color: #fca5a5;
+}
+
+.settings-success-text {
+  margin-top: 0.9rem;
+  color: var(--success-color);
+  font-size: 0.9rem;
 }
 
 @media (max-width: 1080px) {
@@ -1020,6 +1232,19 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 }
 
 @media (max-width: 760px) {
+  .group-card-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .group-header-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .group-settings-btn {
+    width: 100%;
+  }
+
   .group-details-expense-header {
     align-items: stretch;
     flex-direction: column;

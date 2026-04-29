@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/useAuth';
 import api, { groupMembersApi } from '../lib/api';
-import { LogOut, Plus, Users, ArrowRight, UserCircle } from 'lucide-react';
+import { LogOut, Plus, Users, ArrowRight, UserCircle, Archive, ChevronDown, ChevronRight } from 'lucide-react';
 
 const normalizeGroup = (payload) => payload?.group || payload?.data || payload || null;
 
@@ -10,6 +10,8 @@ const normalizeGroups = (payload) => {
   if (Array.isArray(payload)) return payload;
   return payload?.groups || payload?.data || [];
 };
+
+const ARCHIVED_GROUPS_COLLAPSED_KEY = 'tripsplit:archived-groups-collapsed';
 
 const DashboardCustomSelect = ({ value, options, onChange, disabled = false }) => {
   const [open, setOpen] = useState(false);
@@ -84,6 +86,9 @@ const Dashboard = () => {
   const [selectedNewGroupFriends, setSelectedNewGroupFriends] = useState([]);
   const [creatingGroup, setCreatingGroup] = useState(false);
   const [createGroupError, setCreateGroupError] = useState('');
+  const [archivedGroupsCollapsed, setArchivedGroupsCollapsed] = useState(() => (
+    localStorage.getItem(ARCHIVED_GROUPS_COLLAPSED_KEY) === 'true'
+  ));
   const currencyOptions = [
     { value: 'INR', label: 'INR (₹)' },
     { value: 'USD', label: 'USD ($)' },
@@ -117,6 +122,8 @@ const Dashboard = () => {
   const selectedFriendEmailSet = new Set(
     selectedNewGroupFriends.map((friend) => friend.email)
   );
+  const activeGroups = groups.filter((group) => group.status !== 'archived' && !group.archived_at);
+  const archivedGroups = groups.filter((group) => group.status === 'archived' || group.archived_at);
 
   const filteredFriendSuggestions = uniqueFriendCandidates.filter((friend) => {
     if (selectedFriendEmailSet.has(friend.email)) return false;
@@ -198,6 +205,48 @@ const Dashboard = () => {
   const handleRemoveSelectedFriend = (email) => {
     setSelectedNewGroupFriends((prev) => prev.filter((friend) => friend.email !== email));
   };
+
+  const toggleArchivedGroups = () => {
+    setArchivedGroupsCollapsed((prev) => {
+      const nextValue = !prev;
+      localStorage.setItem(ARCHIVED_GROUPS_COLLAPSED_KEY, String(nextValue));
+      return nextValue;
+    });
+  };
+
+  const renderGroupCard = (group, archived = false) => (
+    <Link
+      key={group.id}
+      to={`/groups/${group.id}`}
+      className="glass-panel group-card-link"
+    >
+      <div className="flex justify-between items-start" style={{ marginBottom: '1rem', gap: '0.75rem' }}>
+        <div>
+          <h3 className="font-bold text-2xl">{group.name}</h3>
+          {archived && (
+            <span className="archive-status-badge">
+              <Archive size={13} /> Archived
+            </span>
+          )}
+        </div>
+        <span className="currency-badge">
+          {group.currency}
+        </span>
+      </div>
+
+      {group.description && (
+        <p className="text-secondary group-card-description">
+          {group.description}
+        </p>
+      )}
+
+      <div className="flex items-center gap-2 text-secondary group-card-footer">
+        <Users size={16} />
+        <span style={{ fontSize: '0.9rem' }}>{group.members?.length || 1} members</span>
+        <ArrowRight size={16} style={{ marginLeft: 'auto', color: 'var(--primary-color)' }} />
+      </div>
+    </Link>
+  );
 
   return (
     <div className="container" style={{ paddingBottom: '5rem' }}>
@@ -346,35 +395,40 @@ const Dashboard = () => {
           </button>
         </div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: '1.5rem' }}>
-          {groups.map(group => (
-            <Link 
-              key={group.id} 
-              to={`/groups/${group.id}`} 
-              className="glass-panel" 
-              style={{ textDecoration: 'none', color: 'inherit', display: 'flex', flexDirection: 'column' }}
-            >
-              <div className="flex justify-between items-start" style={{ marginBottom: '1rem' }}>
-                <h3 className="font-bold text-2xl">{group.name}</h3>
-                <span style={{ 
-                  background: 'var(--primary-light)', 
-                  color: 'var(--primary-color)',
-                  padding: '4px 8px',
-                  borderRadius: '6px',
-                  fontSize: '0.8rem',
-                  fontWeight: '600'
-                }}>
-                  {group.currency}
+        <div className="dashboard-groups-stack">
+          {activeGroups.length > 0 ? (
+            <div className="group-card-grid">
+              {activeGroups.map((group) => renderGroupCard(group))}
+            </div>
+          ) : (
+            <div className="glass-panel text-center" style={{ padding: '2.5rem 2rem' }}>
+              <h3 className="text-2xl font-bold" style={{ marginBottom: '0.5rem' }}>No active groups</h3>
+              <p className="text-secondary">Create a group or restore one from the archived section.</p>
+            </div>
+          )}
+
+          {archivedGroups.length > 0 && (
+            <section className="archived-groups-section">
+              <button
+                type="button"
+                className="archived-groups-toggle"
+                onClick={toggleArchivedGroups}
+                aria-expanded={!archivedGroupsCollapsed}
+              >
+                <span className="archived-groups-heading">
+                  <Archive size={18} />
+                  <span className="text-xl font-bold">Archived Groups</span>
+                  <span className="archived-groups-count">{archivedGroups.length}</span>
                 </span>
-              </div>
-              
-              <div className="flex items-center gap-2 text-secondary" style={{ marginTop: 'auto', paddingTop: '1rem', borderTop: '1px solid var(--surface-border)' }}>
-                <Users size={16} />
-                <span style={{ fontSize: '0.9rem' }}>{group.members?.length || 1} members</span>
-                <ArrowRight size={16} style={{ marginLeft: 'auto', color: 'var(--primary-color)' }} />
-              </div>
-            </Link>
-          ))}
+                {archivedGroupsCollapsed ? <ChevronRight size={20} /> : <ChevronDown size={20} />}
+              </button>
+              {!archivedGroupsCollapsed && (
+                <div className="group-card-grid">
+                  {archivedGroups.map((group) => renderGroupCard(group, true))}
+                </div>
+              )}
+            </section>
+          )}
         </div>
       )}
     </div>

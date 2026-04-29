@@ -1,13 +1,20 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import api, { groupInvitesApi, groupMembersApi } from '../lib/api';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import api, { groupInvitesApi, groupMembersApi, groupsApi } from '../lib/api';
 import { useAuth } from '../contexts/useAuth';
-import { ArrowLeft, Plus, Receipt, UserPlus, Pencil, Trash2, CalendarDays } from 'lucide-react';
+import { ArrowLeft, Plus, Receipt, UserPlus, Pencil, Trash2, CalendarDays, Settings, Archive, RotateCcw } from 'lucide-react';
 
 const todayISO = () => new Date().toISOString().split('T')[0];
 const FRIEND_SUGGESTION_DEBOUNCE_MS = 220;
 
 const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((email || '').trim());
+const normalizeGroupPayload = (payload) => payload?.group || payload?.data || payload || null;
+const serverErrorMessage = (error, fallback) => {
+  const errors = error.response?.data?.errors;
+  if (Array.isArray(errors) && errors.length > 0) return errors.join(', ');
+
+  return error.response?.data?.error || fallback;
+};
 
 const isValidISODate = (value) => {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value || '');
@@ -209,8 +216,14 @@ const CustomDateInput = ({ value, onChange, required = false, disabled = false }
 
 const GroupDetails = () => {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const appTitle = 'Tripsplit';
+  const currencyOptions = [
+    { value: 'INR', label: 'INR (₹)' },
+    { value: 'USD', label: 'USD ($)' },
+    { value: 'EUR', label: 'EUR (€)' }
+  ];
   
   const [group, setGroup] = useState(null);
   const [expenses, setExpenses] = useState([]);
@@ -218,6 +231,19 @@ const GroupDetails = () => {
   const [invites, setInvites] = useState([]);
   const [latestExpiredInvite, setLatestExpiredInvite] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showGroupSettings, setShowGroupSettings] = useState(false);
+  const [groupSettingsForm, setGroupSettingsForm] = useState({
+    name: '',
+    description: '',
+    currency: 'INR'
+  });
+  const [groupSettingsError, setGroupSettingsError] = useState('');
+  const [groupSettingsSuccess, setGroupSettingsSuccess] = useState('');
+  const [savingGroupSettings, setSavingGroupSettings] = useState(false);
+  const [archivingGroup, setArchivingGroup] = useState(false);
+  const [restoringGroup, setRestoringGroup] = useState(false);
+  const [deletingGroup, setDeletingGroup] = useState(false);
+  const [deleteGroupConfirmInput, setDeleteGroupConfirmInput] = useState('');
   
   const [showAddExpense, setShowAddExpense] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -272,7 +298,7 @@ const GroupDetails = () => {
         api.get(`/groups/${id}/expenses`),
         api.get(`/groups/${id}/balances`)
       ]);
-      setGroup(groupRes.data.group || groupRes.data.data || groupRes.data);
+      setGroup(normalizeGroupPayload(groupRes.data));
       const expensesData = expensesRes.data;
       setExpenses(Array.isArray(expensesData) ? expensesData : (expensesData.expenses || expensesData.data || []));
       setBalances(balancesRes.data.balances || []);
@@ -297,6 +323,16 @@ const GroupDetails = () => {
 
     document.title = appTitle;
   }, [group, appTitle]);
+
+  useEffect(() => {
+    const groupIsArchived = group?.status === 'archived' || Boolean(group?.archived_at);
+    if (!groupIsArchived) return;
+
+    setShowAddExpense(false);
+    setShowEditExpense(false);
+    setShowInviteModal(false);
+    setShowSettleModal(false);
+  }, [group?.archived_at, group?.status]);
 
   useEffect(() => {
     if (!showAddExpense || !group) return;
@@ -519,6 +555,107 @@ const GroupDetails = () => {
     setFriendSuggestionError('');
     setFriendSuggestions([]);
     setCopiedInviteId(null);
+  };
+
+  const openGroupSettings = () => {
+    if (!group) return;
+
+    setGroupSettingsForm({
+      name: group.name || '',
+      description: group.description || '',
+      currency: group.currency || 'INR'
+    });
+    setGroupSettingsError('');
+    setGroupSettingsSuccess('');
+    setDeleteGroupConfirmInput('');
+    setShowGroupSettings(true);
+  };
+
+  const closeGroupSettings = () => {
+    if (savingGroupSettings || archivingGroup || restoringGroup || deletingGroup) return;
+
+    setShowGroupSettings(false);
+    setGroupSettingsError('');
+    setGroupSettingsSuccess('');
+    setDeleteGroupConfirmInput('');
+  };
+
+  const handleGroupSettingsBackdropClick = (event) => {
+    if (event.target !== event.currentTarget) return;
+    closeGroupSettings();
+  };
+
+  const handleUpdateGroup = async (event) => {
+    event.preventDefault();
+    if (!groupSettingsForm.name.trim()) {
+      setGroupSettingsError('Group name is required');
+      return;
+    }
+
+    try {
+      setSavingGroupSettings(true);
+      setGroupSettingsError('');
+      setGroupSettingsSuccess('');
+      const response = await groupsApi.update(id, {
+        name: groupSettingsForm.name.trim(),
+        description: groupSettingsForm.description.trim(),
+        currency: groupSettingsForm.currency
+      });
+
+      setGroup(normalizeGroupPayload(response.data));
+      setGroupSettingsSuccess('Group details updated');
+    } catch (error) {
+      setGroupSettingsError(serverErrorMessage(error, 'Failed to update group'));
+    } finally {
+      setSavingGroupSettings(false);
+    }
+  };
+
+  const handleArchiveGroup = async () => {
+    try {
+      setArchivingGroup(true);
+      setGroupSettingsError('');
+      setGroupSettingsSuccess('');
+      const response = await groupsApi.archive(id);
+      setGroup(normalizeGroupPayload(response.data));
+      setGroupSettingsSuccess('Group archived');
+    } catch (error) {
+      setGroupSettingsError(serverErrorMessage(error, 'Failed to archive group'));
+    } finally {
+      setArchivingGroup(false);
+    }
+  };
+
+  const handleRestoreGroup = async () => {
+    try {
+      setRestoringGroup(true);
+      setGroupSettingsError('');
+      setGroupSettingsSuccess('');
+      const response = await groupsApi.restore(id);
+      setGroup(normalizeGroupPayload(response.data));
+      setGroupSettingsSuccess('Group restored');
+    } catch (error) {
+      setGroupSettingsError(serverErrorMessage(error, 'Failed to restore group'));
+    } finally {
+      setRestoringGroup(false);
+    }
+  };
+
+  const handleDeleteGroup = async () => {
+    if (deleteGroupConfirmInput !== group.name) {
+      setGroupSettingsError('Type the group name exactly to delete it');
+      return;
+    }
+
+    try {
+      setDeletingGroup(true);
+      setGroupSettingsError('');
+      await groupsApi.delete(id);
+      navigate('/', { replace: true });
+    } catch (error) {
+      setGroupSettingsError(serverErrorMessage(error, 'Failed to delete group'));
+      setDeletingGroup(false);
+    }
   };
 
   useEffect(() => {
@@ -911,7 +1048,7 @@ const GroupDetails = () => {
             </div>
           </div>
         </div>
-        {amount < -0.01 && isCurrentUser && (
+        {amount < -0.01 && isCurrentUser && group?.status !== 'archived' && !group?.archived_at && (
           <button
             className="btn btn-secondary"
             style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
@@ -930,10 +1067,17 @@ const GroupDetails = () => {
   if (!group) return <div className="container text-center pt-20">Group not found</div>;
 
   const currencySym = group.currency === 'INR' ? '₹' : (group.currency === 'USD' ? '$' : '€');
-  const isGroupAdmin = group.created_by_id === user.id;
-  const canManageMembers = isGroupAdmin;
-  const canEditExpense = (expense) => isGroupAdmin || expense.paid_by.id === user.id;
-  const canDeleteExpense = (expense) => isGroupAdmin || expense.paid_by.id === user.id;
+  const isArchived = group.status === 'archived' || Boolean(group.archived_at);
+  const isGroupOwner = group.created_by_id === user.id;
+  const isGroupAdmin = group.current_user_role === 'admin' || group.created_by_id === user.id;
+  const canManageMembers = isGroupAdmin && !isArchived;
+  const canManageGroupSettings = group.can_update || group.can_restore || group.can_delete || isGroupOwner;
+  const canEditGroupDetails = Boolean(group.can_update);
+  const hasFinancialActivity = (group.expense_count || 0) + (group.settlement_count || 0) > 0;
+  const canEditGroupCurrency = canEditGroupDetails && !hasFinancialActivity;
+  const balancesSettled = Boolean(group.balances_settled);
+  const canEditExpense = (expense) => !isArchived && (isGroupAdmin || expense.paid_by.id === user.id);
+  const canDeleteExpense = (expense) => !isArchived && (isGroupAdmin || expense.paid_by.id === user.id);
   const includedEditSplits = editExpenseForm.splits.filter((split) => split.included);
   const orderedBalances = [
     ...balances.filter((balance) => balance.user.id !== user.id),
@@ -965,6 +1109,7 @@ const GroupDetails = () => {
   };
 
   const openSettleModal = () => {
+    if (isArchived) return;
     if (currentUserDebt <= 0 || settlementCandidates.length === 0) return;
 
     const defaultRecipientId = settlementCandidates[0].user.id;
@@ -1076,15 +1221,35 @@ const GroupDetails = () => {
   return (
     <div className="container flex-col gap-6" style={{ paddingBottom: '5rem' }}>
       {/* Header */}
-      <div className="flex items-center gap-4">
-        <Link to="/" className="btn btn-secondary" style={{ padding: '0.5rem', borderRadius: '50%' }}>
-          <ArrowLeft size={20} />
-        </Link>
-        <div>
-          <h1 className="text-title" style={{ fontSize: '2rem' }}>{group.name}</h1>
-          <p className="text-secondary">{group.members.length} members • {group.currency}</p>
+      <div className="group-header-row">
+        <div className="flex items-center gap-4">
+          <Link to="/" className="btn btn-secondary" style={{ padding: '0.5rem', borderRadius: '50%' }}>
+            <ArrowLeft size={20} />
+          </Link>
+          <div>
+            <div className="group-title-line">
+              <h1 className="text-title" style={{ fontSize: '2rem' }}>{group.name}</h1>
+              {isArchived && <span className="archive-status-badge"><Archive size={13} /> Archived</span>}
+            </div>
+            <p className="text-secondary">{group.members.length} members • {group.currency}</p>
+          </div>
         </div>
+        {canManageGroupSettings && (
+          <button type="button" className="btn btn-secondary group-settings-btn" onClick={openGroupSettings}>
+            <Settings size={18} /> Settings
+          </button>
+        )}
       </div>
+
+      {isArchived && (
+        <div className="glass-panel archived-group-banner">
+          <Archive size={20} />
+          <div>
+            <strong>This group is archived.</strong>
+            <p className="text-secondary">Expenses, settlements, invites, and member changes are read-only until the owner restores it.</p>
+          </div>
+        </div>
+      )}
 
       <div className="group-mobile-sections">
         <button
@@ -1116,7 +1281,12 @@ const GroupDetails = () => {
           <div className="group-details-expense-header">
             <h2 className="text-2xl font-bold">Expenses</h2>
             <div className="group-details-expense-actions">
-              <button className="btn btn-primary" onClick={toggleAddExpensePanel}>
+              <button
+                className="btn btn-primary"
+                onClick={toggleAddExpensePanel}
+                disabled={isArchived}
+                title={isArchived ? 'Restore this group before adding expenses' : 'Add expense'}
+              >
                 <Plus size={18} /> Add Expense
               </button>
             </div>
@@ -1454,6 +1624,137 @@ const GroupDetails = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {showGroupSettings && (
+        <div className="modal-overlay" onClick={handleGroupSettingsBackdropClick}>
+          <div className="glass-panel animate-fade-in modal-card group-settings-modal">
+            <div className="group-settings-modal-header">
+              <div>
+                <h3>Group Settings</h3>
+                <p className="text-secondary">Manage group details and lifecycle.</p>
+              </div>
+              {isArchived && <span className="archive-status-badge"><Archive size={13} /> Archived</span>}
+            </div>
+
+            <form onSubmit={handleUpdateGroup} className="flex flex-col gap-3">
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label>Name</label>
+                <input
+                  required
+                  value={groupSettingsForm.name}
+                  onChange={(e) => setGroupSettingsForm((prev) => ({ ...prev, name: e.target.value }))}
+                  disabled={!canEditGroupDetails || savingGroupSettings}
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label>Description</label>
+                <textarea
+                  rows={3}
+                  value={groupSettingsForm.description}
+                  onChange={(e) => setGroupSettingsForm((prev) => ({ ...prev, description: e.target.value }))}
+                  disabled={!canEditGroupDetails || savingGroupSettings}
+                  placeholder="Optional note about this trip or group"
+                />
+              </div>
+
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label>Currency</label>
+                <CustomSelect
+                  value={groupSettingsForm.currency}
+                  options={currencyOptions}
+                  onChange={(nextValue) => setGroupSettingsForm((prev) => ({ ...prev, currency: nextValue }))}
+                  disabled={!canEditGroupCurrency || savingGroupSettings}
+                />
+                {hasFinancialActivity && (
+                  <p className="settings-help-text">
+                    Currency is locked because this group already has expenses or settlements.
+                  </p>
+                )}
+              </div>
+
+              {canEditGroupDetails && (
+                <button type="submit" className="btn btn-primary" disabled={savingGroupSettings}>
+                  {savingGroupSettings ? 'Saving...' : 'Save Changes'}
+                </button>
+              )}
+            </form>
+
+            <div className="settings-divider" />
+
+            <div className="settings-lifecycle-section">
+              <h4>Archive</h4>
+              <p className="text-secondary">
+                Archived groups stay visible in the dashboard and become read-only until restored.
+              </p>
+              {!balancesSettled && (
+                <div className="settings-warning">
+                  Settle all balances before archiving or deleting this group.
+                </div>
+              )}
+
+              {isArchived ? (
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={handleRestoreGroup}
+                  disabled={!group.can_restore || restoringGroup}
+                >
+                  <RotateCcw size={16} /> {restoringGroup ? 'Restoring...' : 'Restore Group'}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={handleArchiveGroup}
+                  disabled={!group.can_archive || archivingGroup}
+                  title={group.can_archive ? 'Archive group' : 'Only the owner can archive after balances are settled'}
+                >
+                  <Archive size={16} /> {archivingGroup ? 'Archiving...' : 'Archive Group'}
+                </button>
+              )}
+            </div>
+
+            {isGroupOwner && (
+              <>
+                <div className="settings-divider" />
+
+                <div className="settings-danger-section">
+                  <h4>Delete Permanently</h4>
+                  <p>
+                    This removes the group, members, invites, expenses, and settlements. It cannot be undone.
+                  </p>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <label>Type "{group.name}" to confirm</label>
+                    <input
+                      value={deleteGroupConfirmInput}
+                      onChange={(e) => setDeleteGroupConfirmInput(e.target.value)}
+                      disabled={!group.can_delete || deletingGroup}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    className="btn btn-danger"
+                    onClick={handleDeleteGroup}
+                    disabled={!group.can_delete || deleteGroupConfirmInput !== group.name || deletingGroup}
+                  >
+                    <Trash2 size={16} /> {deletingGroup ? 'Deleting...' : 'Delete Group'}
+                  </button>
+                </div>
+              </>
+            )}
+
+            {groupSettingsError && <div className="error-text" style={{ marginTop: '0.9rem' }}>{groupSettingsError}</div>}
+            {groupSettingsSuccess && <div className="settings-success-text">{groupSettingsSuccess}</div>}
+
+            <div className="flex gap-3" style={{ marginTop: '1rem' }}>
+              <button type="button" className="btn btn-secondary" onClick={closeGroupSettings} disabled={savingGroupSettings || archivingGroup || restoringGroup || deletingGroup}>
+                Close
+              </button>
+            </div>
           </div>
         </div>
       )}

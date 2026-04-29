@@ -76,6 +76,13 @@ export const groupInvitesApi = {
   revoke: (groupId, inviteId) => api.delete(`/groups/${groupId}/invites/${inviteId}`)
 };
 
+export const groupsApi = {
+  update: (groupId, group) => api.patch(`/groups/${groupId}`, { group }),
+  archive: (groupId) => api.post(`/groups/${groupId}/archive`),
+  restore: (groupId) => api.post(`/groups/${groupId}/restore`),
+  delete: (groupId) => api.delete(`/groups/${groupId}`)
+};
+
 export const inviteLinksApi = {
   get: (token) => api.get(`/invites/${token}`),
   accept: (token) => api.post(`/invites/${token}/accept`)

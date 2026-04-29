@@ -8,6 +8,7 @@ module Api
       before_action :authenticate_user!, except: [:show]
       before_action :set_group, only: %i[index create destroy]
       before_action :ensure_admin!, only: %i[index create destroy]
+      before_action :ensure_active_group!, only: %i[create destroy]
       before_action :set_group_invite, only: [:destroy]
       before_action :set_invite_by_token, only: %i[show accept]
       before_action :validate_invite_expiry_params!, only: [:create]
@@ -55,6 +56,7 @@ module Api
         return render_invite_invalid('Invite link not found', :not_found) unless @invite
         return render_invite_invalid('Invite link has been revoked', :gone) if @invite.revoked?
         return render_invite_invalid('Invite link has expired', :gone) if @invite.expired?
+        return render_invite_invalid('This group is archived', :gone) if @invite.group.archived?
 
         render json: { invite: invite_payload(@invite) }
       end
@@ -63,6 +65,7 @@ module Api
         return render_invite_invalid('Invite link not found', :not_found) unless @invite
         return render_invite_invalid('Invite link has been revoked', :gone) if @invite.revoked?
         return render_invite_invalid('Invite link has expired', :gone) if @invite.expired?
+        return render_invite_invalid('This group is archived', :gone) if @invite.group.archived?
 
         membership = @invite.group.group_memberships.find_or_initialize_by(user: current_user)
 
@@ -86,6 +89,12 @@ module Api
 
       def set_group
         @group = current_user.groups.find(params[:group_id])
+      end
+
+      def ensure_active_group!
+        return unless @group.archived?
+
+        render json: { error: 'Restore this group before managing invites' }, status: :unprocessable_entity
       end
 
       def set_group_invite

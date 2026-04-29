@@ -13,4 +13,12 @@ class Group < ApplicationRecord
 
   validates :name, presence: true
   validates :currency, presence: true
+
+  def archived?
+    archived_at.present?
+  end
+
+  def active?
+    !archived?
+  end
 end
