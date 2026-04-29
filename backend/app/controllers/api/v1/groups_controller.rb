@@ -4,18 +4,20 @@ module Api
   module V1
     class GroupsController < ApplicationController
       before_action :authenticate_user!
-      before_action :set_group, only: %i[show update destroy]
-      before_action :ensure_can_manage_group!, only: %i[update destroy]
+      before_action :set_group, only: %i[show update destroy archive restore]
+      before_action :ensure_can_manage_group!, only: %i[update]
+      before_action :ensure_active_group!, only: %i[update archive]
+      before_action :ensure_owner!, only: %i[archive restore destroy]
+      before_action :ensure_balances_settled!, only: %i[archive destroy]
+      before_action :ensure_currency_editable!, only: %i[update]
 
       def index
-        @groups = current_user.groups.includes(:members)
-        render json: @groups, include: { members: { only: %i[id name email avatar_url] } }
+        @groups = current_user.groups.includes(:members, :group_memberships).order(created_at: :desc)
+        render json: @groups.map { |group| group_payload(group) }
       end
 
       def show
-        render json: @group, include: {
-          members: { only: %i[id name email avatar_url] }
-        }
+        render json: group_payload(@group)
       end
 
       def create
@@ -27,17 +29,30 @@ module Api
           @group.group_memberships.create!(user: current_user, role: 'admin')
         end
 
-        render json: @group, status: :created
+        render json: group_payload(@group.reload), status: :created
       rescue ActiveRecord::RecordInvalid => e
         render json: e.record.errors, status: :unprocessable_entity
       end
 
       def update
         if @group.update(group_params)
-          render json: @group
+          render json: group_payload(@group)
         else
           render json: @group.errors, status: :unprocessable_entity
         end
+      end
+
+      def archive
+        @group.with_lock do
+          @group.group_invites.active.update_all(revoked_at: Time.current)
+          @group.update!(archived_at: Time.current)
+        end
+        render json: group_payload(@group)
+      end
+
+      def restore
+        @group.update!(archived_at: nil)
+        render json: group_payload(@group)
       end
 
       def destroy
@@ -48,7 +63,7 @@ module Api
       private
 
       def set_group
-        @group = current_user.groups.find(params[:id])
+        @group = current_user.groups.includes(:members, :group_memberships).find(params[:id])
       end
 
       def group_params
@@ -60,6 +75,85 @@ module Api
         return if @group.group_memberships.exists?(user_id: current_user.id, role: 'admin')
 
         render json: { error: 'Only group admins or the group creator can modify this group' }, status: :forbidden
+      end
+
+      def ensure_owner!
+        return if @group.created_by_id == current_user.id
+
+        render json: { error: 'Only the group owner can perform this action' }, status: :forbidden
+      end
+
+      def ensure_active_group!
+        return unless @group.archived?
+
+        render json: { error: 'Restore this group before making changes' }, status: :unprocessable_entity
+      end
+
+      def ensure_balances_settled!
+        return if balances_settled?(@group)
+
+        render json: { error: 'Settle all balances before archiving or deleting this group' },
+               status: :unprocessable_entity
+      end
+
+      def ensure_currency_editable!
+        requested_currency = group_params[:currency]
+        return if requested_currency.blank? || requested_currency == @group.currency
+        return unless group_has_financial_activity?(@group)
+
+        render json: { error: 'Currency cannot be changed after expenses or settlements exist' },
+               status: :unprocessable_entity
+      end
+
+      def group_payload(group)
+        archived = group.archived?
+        owner = group.created_by_id == current_user.id
+        settled = balances_settled?(group)
+
+        {
+          id: group.id,
+          name: group.name,
+          description: group.description,
+          currency: group.currency,
+          created_by_id: group.created_by_id,
+          archived_at: group.archived_at,
+          status: archived ? 'archived' : 'active',
+          members: group.members.map { |member| member_payload(member) },
+          current_user_role: current_user_role(group),
+          can_update: can_manage_group?(group) && !archived,
+          can_archive: owner && !archived && settled,
+          can_restore: owner && archived,
+          can_delete: owner && settled,
+          balances_settled: settled,
+          expense_count: group.expenses.count,
+          settlement_count: group.settlements.count
+        }
+      end
+
+      def member_payload(member)
+        {
+          id: member.id,
+          name: member.name,
+          email: member.email,
+          avatar_url: member.avatar_url
+        }
+      end
+
+      def can_manage_group?(group)
+        group.created_by_id == current_user.id ||
+          group.group_memberships.exists?(user_id: current_user.id, role: 'admin')
+      end
+
+      def current_user_role(group)
+        group.group_memberships.find { |membership| membership.user_id == current_user.id }&.role
+      end
+
+      def balances_settled?(group)
+        Balances::Calculator.new(group).call.values.all? { |balance| balance.abs <= BigDecimal('0.01') }
+      end
+
+      def group_has_financial_activity?(group)
+        group.expenses.exists? || group.settlements.exists?
       end
     end
   end

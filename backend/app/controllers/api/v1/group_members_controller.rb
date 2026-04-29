@@ -6,6 +6,7 @@ module Api
       before_action :authenticate_user!
       before_action :set_group
       before_action :ensure_admin!
+      before_action :ensure_active_group!, only: %i[suggestions create]
 
       def suggestions
         shared_group_ids = current_user.group_ids
@@ -70,6 +71,12 @@ module Api
 
       def set_group
         @group = current_user.groups.find(params[:group_id])
+      end
+
+      def ensure_active_group!
+        return unless @group.archived?
+
+        render json: { error: 'Restore this group before managing members' }, status: :unprocessable_entity
       end
 
       def ensure_admin!

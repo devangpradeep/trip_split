@@ -14,6 +14,11 @@ Rails.application.routes.draw do
       post 'invites/:token/accept', to: 'group_invites#accept'
 
       resources :groups do
+        member do
+          post :archive
+          post :restore
+        end
+
         resources :expenses, only: %i[index create show update destroy]
         resources :settlements, only: %i[index create show destroy]
         resources :members, controller: 'group_members', only: [:create] do

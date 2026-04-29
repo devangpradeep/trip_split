@@ -7,6 +7,7 @@ module Api
 
       before_action :authenticate_user!
       before_action :set_group
+      before_action :ensure_active_group!, only: %i[create update destroy]
       before_action :set_expense, only: %i[show update destroy]
       before_action :ensure_can_edit_expense!, only: %i[update]
       before_action :ensure_can_delete_expense!, only: %i[destroy]
@@ -68,6 +69,12 @@ module Api
 
       def set_group
         @group = current_user.groups.find(params[:group_id])
+      end
+
+      def ensure_active_group!
+        return unless @group.archived?
+
+        render json: { error: 'Restore this group before changing expenses' }, status: :unprocessable_entity
       end
 
       def set_expense

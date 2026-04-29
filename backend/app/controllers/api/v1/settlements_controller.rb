@@ -7,6 +7,7 @@ module Api
 
       before_action :authenticate_user!
       before_action :set_group
+      before_action :ensure_active_group!, only: %i[create destroy]
       before_action :set_settlement, only: %i[show destroy]
       before_action :ensure_can_delete_settlement!, only: %i[destroy]
 
@@ -63,6 +64,12 @@ module Api
 
       def set_group
         @group = current_user.groups.find(params[:group_id])
+      end
+
+      def ensure_active_group!
+        return unless @group.archived?
+
+        render json: { error: 'Restore this group before changing settlements' }, status: :unprocessable_entity
       end
 
       def set_settlement
