@@ -21,7 +21,7 @@ Rails.application.routes.draw do
 
         resources :expenses, only: %i[index create show update destroy]
         resources :settlements, only: %i[index create show destroy]
-        resources :members, controller: 'group_members', only: [:create] do
+        resources :members, controller: 'group_members', only: %i[create destroy] do
           collection do
             get :suggestions
           end

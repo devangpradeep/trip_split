@@ -255,6 +255,10 @@ const GroupDetails = () => {
   const [memberEmailInput, setMemberEmailInput] = useState('');
   const [selectedSuggestedFriend, setSelectedSuggestedFriend] = useState(null);
   const [addingMember, setAddingMember] = useState(false);
+  const [pendingRemoveMember, setPendingRemoveMember] = useState(null);
+  const [removingMemberId, setRemovingMemberId] = useState(null);
+  const [removeMemberError, setRemoveMemberError] = useState('');
+  const [removeMemberSuccess, setRemoveMemberSuccess] = useState('');
   const [friendSuggestions, setFriendSuggestions] = useState([]);
   const [loadingFriendSuggestions, setLoadingFriendSuggestions] = useState(false);
   const [friendSuggestionError, setFriendSuggestionError] = useState('');
@@ -774,6 +778,19 @@ const GroupDetails = () => {
     setAddMemberSuccess('');
   };
 
+  const openRemoveMemberConfirm = (member) => {
+    setPendingRemoveMember(member);
+    setRemoveMemberError('');
+    setRemoveMemberSuccess('');
+  };
+
+  const closeRemoveMemberConfirm = () => {
+    if (removingMemberId) return;
+
+    setPendingRemoveMember(null);
+    setRemoveMemberError('');
+  };
+
   const handleAddMember = async (event) => {
     if (event) {
       event.preventDefault();
@@ -833,6 +850,43 @@ const GroupDetails = () => {
       setAddMemberSuccess('');
     } finally {
       setAddingMember(false);
+    }
+  };
+
+  const handleRemoveMember = async () => {
+    if (!pendingRemoveMember?.id) return;
+
+    try {
+      setRemovingMemberId(pendingRemoveMember.id);
+      setRemoveMemberError('');
+      setRemoveMemberSuccess('');
+
+      await groupMembersApi.remove(id, pendingRemoveMember.id);
+
+      const removedMemberName = pendingRemoveMember.name;
+      const nextMembers = (group?.members || []).filter((member) => member.id !== pendingRemoveMember.id);
+      setGroup((prevGroup) => {
+        if (!prevGroup) return prevGroup;
+
+        return {
+          ...prevGroup,
+          members: nextMembers
+        };
+      });
+      setExpenseForm(buildDefaultExpenseForm(nextMembers));
+      setEditExpenseForm((prevForm) => ({
+        ...prevForm,
+        splits: prevForm.splits.filter((split) => split.user_id !== pendingRemoveMember.id),
+        paid_by_id: prevForm.paid_by_id === pendingRemoveMember.id ? user.id : prevForm.paid_by_id
+      }));
+
+      setPendingRemoveMember(null);
+      setRemoveMemberSuccess(`${removedMemberName || 'Member'} removed from the group`);
+    } catch (error) {
+      setRemoveMemberError(serverErrorMessage(error, 'Failed to remove member'));
+      setRemoveMemberSuccess('');
+    } finally {
+      setRemovingMemberId(null);
     }
   };
 
@@ -1069,15 +1123,14 @@ const GroupDetails = () => {
   const currencySym = group.currency === 'INR' ? '₹' : (group.currency === 'USD' ? '$' : '€');
   const isArchived = group.status === 'archived' || Boolean(group.archived_at);
   const isGroupOwner = group.created_by_id === user.id;
-  const isGroupAdmin = group.current_user_role === 'admin' || group.created_by_id === user.id;
-  const canManageMembers = isGroupAdmin && !isArchived;
+  const canManageMembers = isGroupOwner && !isArchived;
   const canManageGroupSettings = group.can_update || group.can_restore || group.can_delete || isGroupOwner;
   const canEditGroupDetails = Boolean(group.can_update);
   const hasFinancialActivity = (group.expense_count || 0) + (group.settlement_count || 0) > 0;
   const canEditGroupCurrency = canEditGroupDetails && !hasFinancialActivity;
   const balancesSettled = Boolean(group.balances_settled);
-  const canEditExpense = (expense) => !isArchived && (isGroupAdmin || expense.paid_by.id === user.id);
-  const canDeleteExpense = (expense) => !isArchived && (isGroupAdmin || expense.paid_by.id === user.id);
+  const canEditExpense = (expense) => !isArchived && (isGroupOwner || expense.paid_by.id === user.id);
+  const canDeleteExpense = (expense) => !isArchived && (isGroupOwner || expense.paid_by.id === user.id);
   const includedEditSplits = editExpenseForm.splits.filter((split) => split.included);
   const orderedBalances = [
     ...balances.filter((balance) => balance.user.id !== user.id),
@@ -1497,19 +1550,36 @@ const GroupDetails = () => {
                 className="btn btn-secondary"
                 onClick={openInviteModal}
                 disabled={!canManageMembers}
-                title={canManageMembers ? 'Invite member via link' : 'Only group admin can invite members'}
+                title={canManageMembers ? 'Invite member via link' : 'Only the group owner can invite members'}
                 style={{ padding: '0.4rem 0.6rem', border: 'none', background: 'transparent', color: 'var(--primary-color)', opacity: canManageMembers ? 1 : 0.4, cursor: canManageMembers ? 'pointer' : 'not-allowed' }}
               >
                 <UserPlus size={18} />
               </button>
             </h2>
             <div className="glass-panel flex flex-col gap-3" style={{ padding: '1rem 1.5rem' }}>
+              {removeMemberSuccess && <div className="settings-success-text" style={{ margin: 0 }}>{removeMemberSuccess}</div>}
+              {removeMemberError && !pendingRemoveMember && (
+                <div className="error-text" style={{ margin: 0 }}>{removeMemberError}</div>
+              )}
               {orderedMembers.map(member => (
-                <div key={member.id} className="flex items-center gap-3">
-                  <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.85rem' }}>
-                    {member.name.charAt(0)}
+                <div key={member.id} className="flex items-center gap-3" style={{ justifyContent: 'space-between' }}>
+                  <div className="flex items-center gap-3" style={{ minWidth: 0 }}>
+                    <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.85rem', flexShrink: 0 }}>
+                      {member.name.charAt(0)}
+                    </div>
+                    <span style={{ fontSize: '0.95rem', minWidth: 0 }}>{member.id === user.id ? 'You' : member.name}</span>
                   </div>
-                  <span style={{ fontSize: '0.95rem' }}>{member.id === user.id ? 'You' : member.name}</span>
+                  {canManageMembers && member.id !== user.id && (
+                    <button
+                      type="button"
+                      className="btn btn-danger"
+                      onClick={() => openRemoveMemberConfirm(member)}
+                      title={`Remove ${member.name} from group`}
+                      style={{ padding: '0.4rem 0.5rem' }}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -1969,6 +2039,42 @@ const GroupDetails = () => {
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {pendingRemoveMember && (
+        <div className="modal-overlay">
+          <div className="glass-panel animate-fade-in modal-card" style={{ width: '100%', maxWidth: 460 }}>
+            <h3 style={{ marginBottom: '0.8rem' }}>Remove Member</h3>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.95rem', marginBottom: '0.35rem' }}>
+              Remove <strong style={{ color: 'var(--text-primary)' }}>{pendingRemoveMember.name}</strong> from this group?
+            </p>
+            <p style={{ color: 'var(--danger-color)', fontSize: '0.85rem', marginBottom: '1rem' }}>
+              This only removes group access. Members with expenses or settlements cannot be removed.
+            </p>
+
+            {removeMemberError && <div className="error-text" style={{ margin: 0 }}>{removeMemberError}</div>}
+
+            <div className="flex gap-3" style={{ marginTop: '0.8rem' }}>
+              <button
+                type="button"
+                className="btn btn-danger"
+                style={{ flex: 1 }}
+                onClick={handleRemoveMember}
+                disabled={removingMemberId === pendingRemoveMember.id}
+              >
+                {removingMemberId === pendingRemoveMember.id ? 'Removing...' : 'Remove Member'}
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={closeRemoveMemberConfirm}
+                disabled={Boolean(removingMemberId)}
+              >
+                Cancel
+              </button>
             </div>
           </div>
         </div>
