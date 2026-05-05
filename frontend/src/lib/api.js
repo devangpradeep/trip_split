@@ -60,6 +60,7 @@ export const groupMembersApi = {
   add: (groupId, email) => api.post(`/groups/${groupId}/members`, {
     member: { email }
   }),
+  remove: (groupId, memberId) => api.delete(`/groups/${groupId}/members/${memberId}`),
   suggestions: (groupId, query = '', limit = 10) => api.get(`/groups/${groupId}/members/suggestions`, {
     params: {
       ...(query ? { q: query } : {}),

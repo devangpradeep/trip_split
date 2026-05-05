@@ -5,8 +5,11 @@ module Api
     class GroupMembersController < ApplicationController
       before_action :authenticate_user!
       before_action :set_group
-      before_action :ensure_admin!
-      before_action :ensure_active_group!, only: %i[suggestions create]
+      before_action :ensure_owner!, only: %i[suggestions create destroy]
+      before_action :ensure_active_group!, only: %i[suggestions create destroy]
+      before_action :set_membership, only: %i[destroy]
+      before_action :ensure_not_self!, only: %i[destroy]
+      before_action :ensure_no_financial_history!, only: %i[destroy]
 
       def suggestions
         shared_group_ids = current_user.group_ids
@@ -67,10 +70,22 @@ module Api
         end
       end
 
+      def destroy
+        @membership.destroy
+        head :no_content
+      end
+
       private
 
       def set_group
         @group = current_user.groups.find(params[:group_id])
+      end
+
+      def set_membership
+        @membership = @group.group_memberships.find_by(user_id: params[:id])
+        return if @membership
+
+        render json: { error: 'Member not found in this group' }, status: :not_found
       end
 
       def ensure_active_group!
@@ -79,11 +94,34 @@ module Api
         render json: { error: 'Restore this group before managing members' }, status: :unprocessable_entity
       end
 
-      def ensure_admin!
-        current_membership = @group.group_memberships.find_by(user_id: current_user.id)
-        return if current_membership&.role == 'admin'
+      def ensure_owner!
+        return if @group.created_by_id == current_user.id
 
-        render json: { error: 'Only group admins can add members' }, status: :forbidden
+        render json: { error: 'Only the group owner can manage members' }, status: :forbidden
+      end
+
+      def ensure_not_self!
+        return unless @membership.user_id == current_user.id
+
+        render json: { error: 'Group owners cannot remove themselves from the group' }, status: :unprocessable_entity
+      end
+
+      def ensure_no_financial_history!
+        return unless member_has_financial_history?(@membership.user_id)
+
+        render json: {
+          error: 'Remove this member from related expenses or settlements before deleting them from the group'
+        }, status: :unprocessable_entity
+      end
+
+      def member_has_financial_history?(user_id)
+        @group.expenses.exists?(paid_by_id: user_id) ||
+          ExpenseSplit.joins(:expense)
+                      .where(expenses: { group_id: @group.id }, user_id: user_id)
+                      .exists? ||
+          @group.settlements
+                .where('from_user_id = :user_id OR to_user_id = :user_id', user_id: user_id)
+                .exists?
       end
 
       def member_params
