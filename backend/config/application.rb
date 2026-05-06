@@ -38,9 +38,20 @@ module Backend
     # Skip views, helpers and assets when generating a new resource.
     config.api_only = true
 
-    config.active_record.encryption.primary_key = ENV.fetch('ACTIVE_RECORD_ENCRYPTION_PRIMARY_KEY')
-    config.active_record.encryption.deterministic_key = ENV.fetch('ACTIVE_RECORD_ENCRYPTION_DETERMINISTIC_KEY')
-    config.active_record.encryption.key_derivation_salt = ENV.fetch('ACTIVE_RECORD_ENCRYPTION_KEY_DERIVATION_SALT')
+    active_record_encryption_keys = {
+      primary_key: ENV.fetch('ACTIVE_RECORD_ENCRYPTION_PRIMARY_KEY', nil),
+      deterministic_key: ENV.fetch('ACTIVE_RECORD_ENCRYPTION_DETERMINISTIC_KEY', nil),
+      key_derivation_salt: ENV.fetch('ACTIVE_RECORD_ENCRYPTION_KEY_DERIVATION_SALT', nil)
+    }
+
+    if active_record_encryption_keys.values.any?(&:present?)
+      missing_keys = active_record_encryption_keys.select { |_key, value| value.blank? }.keys
+      raise KeyError, "Missing Active Record encryption keys: #{missing_keys.join(', ')}" if missing_keys.any?
+
+      config.active_record.encryption.primary_key = active_record_encryption_keys[:primary_key]
+      config.active_record.encryption.deterministic_key = active_record_encryption_keys[:deterministic_key]
+      config.active_record.encryption.key_derivation_salt = active_record_encryption_keys[:key_derivation_salt]
+    end
 
     # Required for Devise in API only mode
     config.session_store :cookie_store, key: '_tripsplit_session'
