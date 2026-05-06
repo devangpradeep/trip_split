@@ -12,6 +12,7 @@ Rails.application.routes.draw do
     namespace :v1 do
       get 'invites/:token', to: 'group_invites#show'
       post 'invites/:token/accept', to: 'group_invites#accept'
+      resource :profile, only: %i[show update]
 
       resources :groups do
         member do

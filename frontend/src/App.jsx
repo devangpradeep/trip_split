@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/react';
 import { AuthProvider } from './contexts/AuthContext';
@@ -8,14 +8,19 @@ import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import GroupDetails from './pages/GroupDetails';
 import JoinGroup from './pages/JoinGroup';
+import Profile from './pages/Profile';
 import InstallPrompt from './components/InstallPrompt';
 
 // Protected Route Wrapper
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth();
+  const location = useLocation();
   
   if (loading) return <div className="container text-center pt-20">Loading...</div>;
-  if (!user) return <Navigate to="/login" replace />;
+  if (!user) {
+    const nextPath = `${location.pathname}${location.search}`;
+    return <Navigate to={`/login?next=${encodeURIComponent(nextPath)}`} replace />;
+  }
   
   return children;
 };
@@ -43,6 +48,12 @@ const AppRoutes = () => {
       <Route path="/groups/:id" element={
         <ProtectedRoute>
           <GroupDetails />
+        </ProtectedRoute>
+      } />
+
+      <Route path="/profile" element={
+        <ProtectedRoute>
+          <Profile />
         </ProtectedRoute>
       } />
       

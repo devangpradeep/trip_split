@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/useAuth';
 import api, { groupMembersApi } from '../lib/api';
@@ -95,9 +95,25 @@ const Dashboard = () => {
     { value: 'EUR', label: 'EUR (€)' }
   ];
 
+  const fetchGroups = useCallback(async () => {
+    try {
+      const response = await api.get('/groups');
+      setGroups(normalizeGroups(response.data));
+    } catch (error) {
+      if (error.response?.status === 401) {
+        await logout();
+        return;
+      }
+
+      console.error('Failed to fetch groups', error);
+    } finally {
+      setLoading(false);
+    }
+  }, [logout]);
+
   useEffect(() => {
     fetchGroups();
-  }, []);
+  }, [fetchGroups]);
 
   const uniqueFriendCandidates = Object.values(
     groups
@@ -136,17 +152,6 @@ const Dashboard = () => {
       friend.email.toLowerCase().includes(query)
     );
   }).slice(0, 8);
-
-  const fetchGroups = async () => {
-    try {
-      const response = await api.get('/groups');
-      setGroups(normalizeGroups(response.data));
-    } catch (error) {
-      console.error('Failed to fetch groups', error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleCreateGroup = async (e) => {
     e.preventDefault();
@@ -255,10 +260,10 @@ const Dashboard = () => {
         <h1 className="text-2xl font-bold heading-gradient">Tripsplit</h1>
         
         <div className="dashboard-header-actions">
-          <div className="flex items-center gap-2" style={{ color: 'var(--text-secondary)' }}>
+          <Link to="/profile" className="dashboard-profile-link">
             <UserCircle size={20} />
             <span style={{ fontWeight: '500' }}>{user?.name}</span>
-          </div>
+          </Link>
           <button onClick={logout} className="btn btn-secondary" style={{ padding: '0.5rem 1rem' }}>
             <LogOut size={16} /> Logout
           </button>
