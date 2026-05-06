@@ -6,6 +6,11 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  const clearStoredAuth = () => {
+    localStorage.removeItem('user');
+    localStorage.removeItem('token');
+  };
+
   useEffect(() => {
     // Check for stored user data on load
     const storedUser = localStorage.getItem('user');
@@ -15,13 +20,13 @@ export const AuthProvider = ({ children }) => {
       try {
         setUser(JSON.parse(storedUser));
       } catch {
-        localStorage.removeItem('user');
-        localStorage.removeItem('token');
+        clearStoredAuth();
       }
     }
 
     const handleSessionExpired = () => {
       setUser(null);
+      clearStoredAuth();
     };
 
     window.addEventListener(AUTH_SESSION_EXPIRED_EVENT, handleSessionExpired);
@@ -82,9 +87,13 @@ export const AuthProvider = ({ children }) => {
       console.error('Logout error', error);
     } finally {
       setUser(null);
-      localStorage.removeItem('user');
-      localStorage.removeItem('token');
+      clearStoredAuth();
     }
+  };
+
+  const updateUser = (nextUser) => {
+    setUser(nextUser);
+    localStorage.setItem('user', JSON.stringify(nextUser));
   };
 
   const value = {
@@ -92,7 +101,8 @@ export const AuthProvider = ({ children }) => {
     loading,
     login,
     register,
-    logout
+    logout,
+    updateUser
   };
 
   return (

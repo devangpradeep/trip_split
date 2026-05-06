@@ -56,6 +56,11 @@ export const authApi = {
   })
 };
 
+export const profileApi = {
+  get: () => api.get('/profile'),
+  update: (user) => api.patch('/profile', { user })
+};
+
 export const groupMembersApi = {
   add: (groupId, email) => api.post(`/groups/${groupId}/members`, {
     member: { email }
