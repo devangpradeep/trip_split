@@ -62,7 +62,8 @@ module Api
               id: user.id,
               name: user.name,
               email: user.email,
-              avatar_url: user.avatar_url
+              avatar_url: user.avatar_url,
+              can_remove: member_removable?(user.id)
             }
           }, status: :created
         else
@@ -116,12 +117,20 @@ module Api
 
       def member_has_financial_history?(user_id)
         @group.expenses.exists?(paid_by_id: user_id) ||
+          @group.expenses.exists?(created_by_id: user_id) ||
           ExpenseSplit.joins(:expense)
                       .where(expenses: { group_id: @group.id }, user_id: user_id)
                       .exists? ||
           @group.settlements
                 .where('from_user_id = :user_id OR to_user_id = :user_id', user_id: user_id)
                 .exists?
+      end
+
+      def member_removable?(user_id)
+        @group.created_by_id == current_user.id &&
+          !@group.archived? &&
+          user_id != current_user.id &&
+          !member_has_financial_history?(user_id)
       end
 
       def member_params

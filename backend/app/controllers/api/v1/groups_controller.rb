@@ -118,7 +118,7 @@ module Api
           created_by_id: group.created_by_id,
           archived_at: group.archived_at,
           status: archived ? 'archived' : 'active',
-          members: group.members.map { |member| member_payload(member) },
+          members: group.members.map { |member| member_payload(group, member) },
           current_user_role: current_user_role(group),
           can_update: can_manage_group?(group) && !archived,
           can_archive: owner && !archived && settled,
@@ -130,12 +130,13 @@ module Api
         }
       end
 
-      def member_payload(member)
+      def member_payload(group, member)
         {
           id: member.id,
           name: member.name,
           email: member.email,
-          avatar_url: member.avatar_url
+          avatar_url: member.avatar_url,
+          can_remove: member_removable?(group, member)
         }
       end
 
@@ -154,6 +155,24 @@ module Api
 
       def group_has_financial_activity?(group)
         group.expenses.exists? || group.settlements.exists?
+      end
+
+      def member_removable?(group, member)
+        group.created_by_id == current_user.id &&
+          !group.archived? &&
+          member.id != current_user.id &&
+          !member_has_financial_history?(group, member.id)
+      end
+
+      def member_has_financial_history?(group, user_id)
+        group.expenses.exists?(paid_by_id: user_id) ||
+          group.expenses.exists?(created_by_id: user_id) ||
+          ExpenseSplit.joins(:expense)
+                      .where(expenses: { group_id: group.id }, user_id: user_id)
+                      .exists? ||
+          group.settlements
+               .where('from_user_id = :user_id OR to_user_id = :user_id', user_id: user_id)
+               .exists?
       end
     end
   end

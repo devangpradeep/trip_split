@@ -60,10 +60,11 @@ const formatDateTimeForUI = (value) => {
   return date.toLocaleString();
 };
 
-const buildDefaultExpenseForm = (members = []) => ({
+const buildDefaultExpenseForm = (members = [], paidById = '') => ({
   description: '',
   amount: '',
   date: todayISO(),
+  paid_by_id: paidById,
   split_type: 'equal',
   splits: members.map((member) => ({
     user_id: member.id,
@@ -410,13 +411,14 @@ const GroupDetails = () => {
           amount: expenseForm.amount,
           date: expenseForm.date,
           currency: group.currency,
+          paid_by_id: expenseForm.paid_by_id || user.id,
           split_type: expenseForm.split_type,
           splits: splitsPayload
         }
       });
       
       setShowAddExpense(false);
-      setExpenseForm(buildDefaultExpenseForm(group.members));
+      setExpenseForm(buildDefaultExpenseForm(group.members, user.id));
       fetchGroupData(); // Refresh all data
     } catch (error) {
       const serverError = error.response?.data?.errors?.join(', ');
@@ -498,7 +500,7 @@ const GroupDetails = () => {
     }
 
     setAddExpenseError('');
-    setExpenseForm(buildDefaultExpenseForm(group?.members || []));
+    setExpenseForm(buildDefaultExpenseForm(group?.members || [], user.id));
     setShowAddExpense(true);
   };
 
@@ -873,7 +875,7 @@ const GroupDetails = () => {
           members: nextMembers
         };
       });
-      setExpenseForm(buildDefaultExpenseForm(nextMembers));
+      setExpenseForm(buildDefaultExpenseForm(nextMembers, user.id));
       setEditExpenseForm((prevForm) => ({
         ...prevForm,
         splits: prevForm.splits.filter((split) => split.user_id !== pendingRemoveMember.id),
@@ -1129,7 +1131,11 @@ const GroupDetails = () => {
   const hasFinancialActivity = (group.expense_count || 0) + (group.settlement_count || 0) > 0;
   const canEditGroupCurrency = canEditGroupDetails && !hasFinancialActivity;
   const balancesSettled = Boolean(group.balances_settled);
-  const canEditExpense = (expense) => !isArchived && (isGroupOwner || expense.paid_by.id === user.id);
+  const canEditExpense = (expense) => !isArchived && (
+    isGroupOwner ||
+    expense.paid_by.id === user.id ||
+    expense.created_by?.id === user.id
+  );
   const canDeleteExpense = (expense) => !isArchived && (isGroupOwner || expense.paid_by.id === user.id);
   const includedEditSplits = editExpenseForm.splits.filter((split) => split.included);
   const orderedBalances = [
@@ -1143,6 +1149,10 @@ const GroupDetails = () => {
   const existingMemberEmails = new Set(
     group.members.map((member) => member.email?.trim().toLowerCase()).filter(Boolean)
   );
+  const payerOptions = group.members.map((member) => ({
+    value: member.id,
+    label: member.id === user.id ? 'You' : member.name
+  }));
   const filteredFriendSuggestions = friendSuggestions.filter((person) => {
     if (!person.email) return false;
     return !existingMemberEmails.has(person.email.toLowerCase());
@@ -1348,7 +1358,7 @@ const GroupDetails = () => {
           {showAddExpense && (
             <div className="glass-panel animate-fade-in">
               <h3 style={{ marginBottom: '1rem' }}>Add New Expense</h3>
-              <form onSubmit={handleAddExpense} className="flex flex-col gap-3">
+              <form onSubmit={handleAddExpense} className="flex flex-col expense-form-panel">
                 <div className="form-group" style={{ marginBottom: 0 }}>
                   <label>Description</label>
                   <input
@@ -1358,7 +1368,15 @@ const GroupDetails = () => {
                     onChange={(e) => setExpenseForm((prev) => ({ ...prev, description: e.target.value }))}
                   />
                 </div>
-                <div className="expense-form-fields-row">
+                <div className="form-group expense-paid-by-field" style={{ marginBottom: 0 }}>
+                  <label>Who paid?</label>
+                  <CustomSelect
+                    value={expenseForm.paid_by_id || user.id}
+                    options={payerOptions}
+                    onChange={(nextValue) => setExpenseForm((prev) => ({ ...prev, paid_by_id: nextValue }))}
+                  />
+                </div>
+                <div className="expense-form-fields-row expense-form-details-row">
                   <div className="form-group" style={{ marginBottom: 0, flex: 1 }}>
                     <label>Amount ({group.currency})</label>
                     <input
@@ -1389,7 +1407,7 @@ const GroupDetails = () => {
                   </div>
                 </div>
 
-                <div style={{ marginTop: '0.5rem' }}>
+                <div className="expense-splits-section">
                   <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '0.6rem' }}>
                     Choose participants and split values:
                   </div>
@@ -1473,6 +1491,11 @@ const GroupDetails = () => {
                       <div className="expense-subtitle">
                         {expense.paid_by.id === user.id ? 'You' : expense.paid_by.name} paid {currencySym}{parseFloat(expense.amount).toFixed(2)}
                       </div>
+                      {expense.created_by && (
+                        <div className="expense-subtitle">
+                          Added by {expense.created_by.id === user.id ? 'You' : expense.created_by.name}
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="text-right expense-side">
@@ -1569,7 +1592,7 @@ const GroupDetails = () => {
                     </div>
                     <span style={{ fontSize: '0.95rem', minWidth: 0 }}>{member.id === user.id ? 'You' : member.name}</span>
                   </div>
-                  {canManageMembers && member.id !== user.id && (
+                  {member.can_remove && (
                     <button
                       type="button"
                       className="btn btn-danger"
@@ -1591,7 +1614,7 @@ const GroupDetails = () => {
         <div className="modal-overlay">
           <div className="glass-panel animate-fade-in modal-card" style={{ width: '100%', maxWidth: 760, maxHeight: '90vh', overflowY: 'auto' }}>
             <h3 style={{ marginBottom: '1rem' }}>Edit Expense</h3>
-            <form onSubmit={handleUpdateExpense} className="flex flex-col gap-3">
+            <form onSubmit={handleUpdateExpense} className="flex flex-col expense-form-panel">
               <div className="form-group" style={{ marginBottom: 0 }}>
                 <label>Description</label>
                 <input
@@ -1600,8 +1623,16 @@ const GroupDetails = () => {
                   onChange={(e) => setEditExpenseForm((prev) => ({ ...prev, description: e.target.value }))}
                 />
               </div>
+              <div className="form-group expense-paid-by-field" style={{ marginBottom: 0 }}>
+                <label>Who paid?</label>
+                <CustomSelect
+                  value={editExpenseForm.paid_by_id || user.id}
+                  options={payerOptions}
+                  onChange={(nextValue) => setEditExpenseForm((prev) => ({ ...prev, paid_by_id: nextValue }))}
+                />
+              </div>
 
-              <div className="expense-form-fields-row">
+              <div className="expense-form-fields-row expense-form-details-row">
                 <div className="form-group" style={{ marginBottom: 0, flex: 1 }}>
                   <label>Amount ({group.currency})</label>
                   <input
@@ -1631,7 +1662,7 @@ const GroupDetails = () => {
                 </div>
               </div>
 
-              <div style={{ marginTop: '0.5rem' }}>
+              <div className="expense-splits-section">
                 <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '0.6rem' }}>
                   Choose participants and split values:
                 </div>
