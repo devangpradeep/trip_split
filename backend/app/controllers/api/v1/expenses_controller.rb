@@ -13,9 +13,10 @@ module Api
       before_action :ensure_can_delete_expense!, only: %i[destroy]
 
       def index
-        @expenses = @group.expenses.includes(:paid_by, expense_splits: :user).order(date: :desc)
+        @expenses = @group.expenses.includes(:paid_by, :created_by, expense_splits: :user).order(date: :desc)
         render json: @expenses, include: {
           paid_by: { only: %i[id name avatar_url] },
+          created_by: { only: %i[id name avatar_url] },
           expense_splits: { include: { user: { only: %i[id name avatar_url] } } }
         }
       end
@@ -23,6 +24,7 @@ module Api
       def create
         @expense = @group.expenses.build(expense_params)
         @expense.split_type = normalized_split_type
+        @expense.created_by = current_user
 
         begin
           assign_paid_by!
@@ -83,20 +85,22 @@ module Api
 
       def ensure_can_edit_expense!
         return if @expense.paid_by_id == current_user.id
-        return if @group.group_memberships.exists?(user_id: current_user.id, role: 'admin')
+        return if @expense.created_by_id == current_user.id
+        return if group_owner?
 
-        render json: { error: 'Only group admins or the expense payer can edit this expense' }, status: :forbidden
+        render json: { error: 'Only the group owner, expense payer, or expense creator can edit this expense' },
+               status: :forbidden
       end
 
       def ensure_can_delete_expense!
         return if @expense.paid_by_id == current_user.id
-        return if @group.group_memberships.exists?(user_id: current_user.id, role: 'admin')
+        return if group_owner?
 
-        render json: { error: 'Only group admins or the expense payer can delete this expense' }, status: :forbidden
+        render json: { error: 'Only the group owner or expense payer can delete this expense' }, status: :forbidden
       end
 
-      def group_admin?
-        @group.group_memberships.exists?(user_id: current_user.id, role: 'admin')
+      def group_owner?
+        @group.created_by_id == current_user.id
       end
 
       def requested_paid_by_id
@@ -105,18 +109,8 @@ module Api
 
       def assign_paid_by!
         requested_id = requested_paid_by_id
-
-        if group_admin?
-          @expense.paid_by = find_group_member!(requested_id) if requested_id
-          @expense.paid_by ||= current_user
-          return
-        end
-
-        if requested_id.present? && requested_id != current_user.id
-          raise SplitValidationError, 'Only group admins can choose another payer'
-        end
-
-        @expense.paid_by = current_user if @expense.new_record?
+        @expense.paid_by = find_group_member!(requested_id) if requested_id
+        @expense.paid_by ||= current_user
       end
 
       def find_group_member!(user_id)
@@ -246,6 +240,7 @@ module Api
       def render_expense(expense, status = :ok)
         render json: expense, status: status, include: {
           paid_by: { only: %i[id name avatar_url] },
+          created_by: { only: %i[id name avatar_url] },
           expense_splits: { include: { user: { only: %i[id name avatar_url] } } }
         }
       end
