@@ -7,6 +7,7 @@ import NotificationBell from '../components/NotificationBell';
 
 const todayISO = () => new Date().toISOString().split('T')[0];
 const FRIEND_SUGGESTION_DEBOUNCE_MS = 220;
+const GROUP_DATA_POLL_INTERVAL_MS = 10000;
 
 const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((email || '').trim());
 const normalizeGroupPayload = (payload) => payload?.group || payload?.data || payload || null;
@@ -296,9 +297,13 @@ const GroupDetails = () => {
     splits: []
   });
   const [expenseForm, setExpenseForm] = useState(() => buildDefaultExpenseForm());
+  const groupDataFetchInFlightRef = useRef(false);
 
   const fetchGroupData = useCallback(async () => {
+    if (groupDataFetchInFlightRef.current) return;
+
     try {
+      groupDataFetchInFlightRef.current = true;
       const [groupRes, expensesRes, balancesRes] = await Promise.all([
         api.get(`/groups/${id}`),
         api.get(`/groups/${id}/expenses`),
@@ -311,12 +316,38 @@ const GroupDetails = () => {
     } catch (error) {
       console.error('Failed to fetch group data', error);
     } finally {
+      groupDataFetchInFlightRef.current = false;
       setLoading(false);
     }
   }, [id]);
 
   useEffect(() => {
     fetchGroupData();
+
+    const refreshGroupData = () => {
+      fetchGroupData();
+    };
+
+    const intervalId = window.setInterval(() => {
+      if (document.visibilityState === 'hidden') return;
+
+      refreshGroupData();
+    }, GROUP_DATA_POLL_INTERVAL_MS);
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refreshGroupData();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', refreshGroupData);
+
+    return () => {
+      window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', refreshGroupData);
+    };
   }, [fetchGroupData]);
 
   useEffect(() => {
