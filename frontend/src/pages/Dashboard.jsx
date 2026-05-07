@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/useAuth';
 import api, { groupMembersApi } from '../lib/api';
 import { LogOut, Plus, Users, ArrowRight, UserCircle, Archive, ChevronDown, ChevronRight } from 'lucide-react';
+import NotificationBell from '../components/NotificationBell';
 
 const normalizeGroup = (payload) => payload?.group || payload?.data || payload || null;
 
@@ -260,13 +261,16 @@ const Dashboard = () => {
         <h1 className="text-2xl font-bold heading-gradient">Tripsplit</h1>
         
         <div className="dashboard-header-actions">
-          <Link to="/profile" className="dashboard-profile-link">
-            <UserCircle size={20} />
-            <span style={{ fontWeight: '500' }}>{user?.name}</span>
-          </Link>
-          <button onClick={logout} className="btn btn-secondary" style={{ padding: '0.5rem 1rem' }}>
-            <LogOut size={16} /> Logout
-          </button>
+          <NotificationBell />
+          <div className="dashboard-account-actions">
+            <Link to="/profile" className="dashboard-profile-link">
+              <UserCircle size={20} />
+              <span style={{ fontWeight: '500' }}>{user?.name}</span>
+            </Link>
+            <button onClick={logout} className="btn btn-secondary" style={{ padding: '0.5rem 1rem' }}>
+              <LogOut size={16} /> Logout
+            </button>
+          </div>
         </div>
       </header>
 

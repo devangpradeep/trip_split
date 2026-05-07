@@ -61,6 +61,12 @@ export const profileApi = {
   update: (user) => api.patch('/profile', { user })
 };
 
+export const notificationsApi = {
+  list: (limit = 20) => api.get('/notifications', { params: { limit } }),
+  markRead: (notificationId) => api.patch(`/notifications/${notificationId}/read`),
+  markAllRead: () => api.patch('/notifications/mark_all_read')
+};
+
 export const groupMembersApi = {
   add: (groupId, email) => api.post(`/groups/${groupId}/members`, {
     member: { email }

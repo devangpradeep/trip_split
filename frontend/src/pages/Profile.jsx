@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { ArrowLeft, Check, Copy, CreditCard, Pencil, Save, UserCircle } from 'lucide-react';
 import { profileApi } from '../lib/api';
 import { useAuth } from '../contexts/useAuth';
+import NotificationBell from '../components/NotificationBell';
 
 const emptyProfileForm = {
   name: '',
@@ -141,11 +142,14 @@ const Profile = () => {
           </div>
         </div>
 
-        {!editing && (
-          <button type="button" className="btn btn-primary" onClick={() => setEditing(true)}>
-            <Pencil size={17} /> Edit
-          </button>
-        )}
+        <div className="profile-header-actions">
+          <NotificationBell />
+          {!editing && (
+            <button type="button" className="btn btn-primary" onClick={() => setEditing(true)}>
+              <Pencil size={17} /> Edit
+            </button>
+          )}
+        </div>
       </div>
 
       {error && <div className="error-text profile-status">{error}</div>}

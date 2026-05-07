@@ -32,6 +32,7 @@ module Api
             @expense.save!
             replace_splits!(@expense)
           end
+          notify_expense_created(@expense)
           render_expense(@expense, :created)
         rescue SplitValidationError => e
           render json: { errors: [e.message] }, status: :unprocessable_entity
@@ -54,6 +55,7 @@ module Api
             @expense.save!
             replace_splits!(@expense)
           end
+          notify_expense_updated(@expense)
           render_expense(@expense)
         rescue SplitValidationError => e
           render json: { errors: [e.message] }, status: :unprocessable_entity
@@ -63,7 +65,14 @@ module Api
       end
 
       def destroy
+        recipients = expense_notification_recipients(@expense)
+        description = @expense.description
+        amount = @expense.amount
+        currency = @expense.currency
+
         @expense.destroy
+        notify_expense_deleted(recipients, description, amount, currency)
+
         head :no_content
       end
 
@@ -247,6 +256,64 @@ module Api
 
       def expense_params
         params.require(:expense).permit(:description, :amount, :currency, :split_type, :date, :category)
+      end
+
+      def notify_expense_created(expense)
+        Notifications::Creator.call(
+          recipients: expense_notification_recipients(expense),
+          actor: current_user,
+          group: @group,
+          notifiable: expense,
+          event_type: 'expense_created',
+          title: "New expense in #{@group.name}",
+          body: expense_created_notification_body(expense),
+          url: "/groups/#{@group.id}"
+        )
+      end
+
+      def notify_expense_updated(expense)
+        Notifications::Creator.call(
+          recipients: expense_notification_recipients(expense),
+          actor: current_user,
+          group: @group,
+          notifiable: expense,
+          event_type: 'expense_updated',
+          title: "Expense updated in #{@group.name}",
+          body: "#{current_user.name} updated #{expense.description}",
+          url: "/groups/#{@group.id}"
+        )
+      end
+
+      def notify_expense_deleted(recipients, description, amount, currency)
+        Notifications::Creator.call(
+          recipients: recipients,
+          actor: current_user,
+          group: @group,
+          event_type: 'expense_deleted',
+          title: "Expense deleted in #{@group.name}",
+          body: "#{current_user.name} deleted #{description} for #{notification_amount(amount, currency)}",
+          url: "/groups/#{@group.id}"
+        )
+      end
+
+      def expense_notification_recipients(expense)
+        user_ids = [expense.paid_by_id, *expense.expense_splits.pluck(:user_id)].compact.uniq
+
+        User.where(id: user_ids)
+      end
+
+      def notification_amount(amount, currency)
+        "#{currency} #{format('%.2f', amount.to_d)}"
+      end
+
+      def expense_created_notification_body(expense)
+        [
+          current_user.name,
+          'added',
+          expense.description,
+          'for',
+          notification_amount(expense.amount, expense.currency)
+        ].join(' ')
       end
     end
   end
