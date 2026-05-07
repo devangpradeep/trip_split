@@ -56,6 +56,8 @@ module Api
         membership.role = 'member'
 
         if membership.save
+          notify_member_added(user)
+
           render json: {
             message: 'Member added successfully',
             member: {
@@ -131,6 +133,19 @@ module Api
           !@group.archived? &&
           user_id != current_user.id &&
           !member_has_financial_history?(user_id)
+      end
+
+      def notify_member_added(user)
+        Notifications::Creator.call(
+          recipients: [user],
+          actor: current_user,
+          group: @group,
+          notifiable: @group,
+          event_type: 'group_member_added',
+          title: "Added to #{@group.name}",
+          body: "#{current_user.name} added you to the group",
+          url: "/groups/#{@group.id}"
+        )
       end
 
       def member_params

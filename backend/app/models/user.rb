@@ -24,6 +24,8 @@ class User < ApplicationRecord
   has_many :expense_splits, dependent: :destroy
   has_many :settlements_sent, class_name: 'Settlement', foreign_key: 'from_user_id'
   has_many :settlements_received, class_name: 'Settlement', foreign_key: 'to_user_id'
+  has_many :notifications, dependent: :destroy
+  has_many :notifications_created, class_name: 'Notification', foreign_key: 'actor_id', dependent: :nullify
 
   validates :name, presence: true
   validates :upi_id,

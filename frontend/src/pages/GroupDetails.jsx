@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from 'react-router-dom';
 import api, { groupInvitesApi, groupMembersApi, groupsApi } from '../lib/api';
 import { useAuth } from '../contexts/useAuth';
 import { ArrowLeft, Plus, Receipt, UserPlus, Pencil, Trash2, CalendarDays, Settings, Archive, RotateCcw } from 'lucide-react';
+import NotificationBell from '../components/NotificationBell';
 
 const todayISO = () => new Date().toISOString().split('T')[0];
 const FRIEND_SUGGESTION_DEBOUNCE_MS = 220;
@@ -1297,11 +1298,14 @@ const GroupDetails = () => {
             <p className="text-secondary">{group.members.length} members • {group.currency}</p>
           </div>
         </div>
-        {canManageGroupSettings && (
-          <button type="button" className="btn btn-secondary group-settings-btn" onClick={openGroupSettings}>
-            <Settings size={18} /> Settings
-          </button>
-        )}
+        <div className="group-header-actions">
+          <NotificationBell />
+          {canManageGroupSettings && (
+            <button type="button" className="btn btn-secondary group-settings-btn" onClick={openGroupSettings}>
+              <Settings size={18} /> Settings
+            </button>
+          )}
+        </div>
       </div>
 
       {isArchived && (

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_06_100000) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_07_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pgcrypto"
@@ -87,6 +87,26 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_06_100000) do
     t.index ["jti"], name: "index_jwt_denylists_on_jti"
   end
 
+  create_table "notifications", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.uuid "actor_id"
+    t.text "body"
+    t.datetime "created_at", null: false
+    t.string "event_type", null: false
+    t.uuid "group_id"
+    t.uuid "notifiable_id"
+    t.string "notifiable_type"
+    t.datetime "read_at"
+    t.string "title", null: false
+    t.datetime "updated_at", null: false
+    t.string "url"
+    t.uuid "user_id", null: false
+    t.index ["actor_id"], name: "index_notifications_on_actor_id"
+    t.index ["group_id"], name: "index_notifications_on_group_id"
+    t.index ["notifiable_type", "notifiable_id"], name: "index_notifications_on_notifiable"
+    t.index ["user_id", "read_at", "created_at"], name: "index_notifications_on_user_id_and_read_at_and_created_at"
+    t.index ["user_id"], name: "index_notifications_on_user_id"
+  end
+
   create_table "settlements", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.decimal "amount"
     t.datetime "created_at", null: false
@@ -131,6 +151,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_06_100000) do
   add_foreign_key "group_memberships", "groups"
   add_foreign_key "group_memberships", "users"
   add_foreign_key "groups", "users", column: "created_by_id"
+  add_foreign_key "notifications", "groups", on_delete: :nullify
+  add_foreign_key "notifications", "users"
+  add_foreign_key "notifications", "users", column: "actor_id", on_delete: :nullify
   add_foreign_key "settlements", "groups"
   add_foreign_key "settlements", "users", column: "from_user_id"
   add_foreign_key "settlements", "users", column: "to_user_id"

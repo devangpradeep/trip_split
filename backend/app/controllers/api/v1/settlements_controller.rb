@@ -38,6 +38,8 @@ module Api
         )
 
         @settlement.save!
+        notify_settlement_created(@settlement)
+
         render json: @settlement, status: :created, include: {
           from_user: { only: %i[id name avatar_url] },
           to_user: { only: %i[id name avatar_url] }
@@ -56,7 +58,12 @@ module Api
       end
 
       def destroy
+        recipients = [@settlement.from_user, @settlement.to_user]
+        amount = @settlement.amount
+
         @settlement.destroy
+        notify_settlement_deleted(recipients, amount)
+
         head :no_content
       end
 
@@ -117,6 +124,35 @@ module Api
 
         render json: { error: 'Only group admins or the member who recorded this settlement can delete it' },
                status: :forbidden
+      end
+
+      def notify_settlement_created(settlement)
+        Notifications::Creator.call(
+          recipients: [settlement.to_user],
+          actor: current_user,
+          group: @group,
+          notifiable: settlement,
+          event_type: 'settlement_created',
+          title: "Settlement recorded in #{@group.name}",
+          body: "#{current_user.name} recorded #{notification_amount(settlement.amount)}",
+          url: "/groups/#{@group.id}"
+        )
+      end
+
+      def notify_settlement_deleted(recipients, amount)
+        Notifications::Creator.call(
+          recipients: recipients,
+          actor: current_user,
+          group: @group,
+          event_type: 'settlement_deleted',
+          title: "Settlement deleted in #{@group.name}",
+          body: "#{current_user.name} deleted a settlement for #{notification_amount(amount)}",
+          url: "/groups/#{@group.id}"
+        )
+      end
+
+      def notification_amount(amount)
+        "#{@group.currency} #{format('%.2f', amount.to_d)}"
       end
     end
   end
