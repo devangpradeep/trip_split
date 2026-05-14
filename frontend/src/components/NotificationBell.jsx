@@ -5,6 +5,10 @@ import { notificationsApi } from '../lib/api';
 
 const NOTIFICATION_POLL_INTERVAL_MS = 10000;
 export const NOTIFICATIONS_REFRESH_EVENT = 'notifications:refresh';
+const NOTIFICATION_FILTERS = [
+  { value: 'all', label: 'All' },
+  { value: 'unread', label: 'Unread' }
+];
 
 const formatNotificationTime = (value) => {
   if (!value) return '';
@@ -22,9 +26,27 @@ const formatNotificationTime = (value) => {
   if (hours < 24) return `${hours}h ago`;
 
   const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}d ago`;
+  if (days === 1) {
+    return `Yesterday, ${createdAt.toLocaleTimeString(undefined, {
+      hour: 'numeric',
+      minute: '2-digit'
+    })}`;
+  }
 
-  return createdAt.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+  if (days < 7) {
+    return createdAt.toLocaleDateString(undefined, {
+      weekday: 'short',
+      hour: 'numeric',
+      minute: '2-digit'
+    });
+  }
+
+  return createdAt.toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'short',
+    hour: 'numeric',
+    minute: '2-digit'
+  });
 };
 
 const NotificationBell = () => {
@@ -35,6 +57,7 @@ const NotificationBell = () => {
   const [error, setError] = useState('');
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  const [activeFilter, setActiveFilter] = useState('unread');
 
   const fetchNotifications = useCallback(async ({ silent = false } = {}) => {
     try {
@@ -146,6 +169,19 @@ const NotificationBell = () => {
     }
   };
 
+  const visibleNotifications = activeFilter === 'unread'
+    ? notifications.filter((notification) => !notification.read)
+    : notifications;
+  const emptyState = activeFilter === 'unread'
+    ? {
+      title: "You're all caught up",
+      body: 'New unread notifications will show here.'
+    }
+    : {
+      title: 'No notifications yet',
+      body: 'Updates about groups, expenses, and settlements will appear here.'
+    };
+
   return (
     <div ref={rootRef} className={`notification-bell ${unreadCount > 0 ? 'has-unread' : ''}`}>
       <button
@@ -179,15 +215,36 @@ const NotificationBell = () => {
             </button>
           </div>
 
+          <div className="notification-filter-tabs" role="tablist" aria-label="Notification filters">
+            {NOTIFICATION_FILTERS.map((filter) => (
+              <button
+                key={filter.value}
+                type="button"
+                role="tab"
+                aria-selected={activeFilter === filter.value}
+                className={`notification-filter-tab ${activeFilter === filter.value ? 'active' : ''}`}
+                onClick={() => setActiveFilter(filter.value)}
+              >
+                {filter.label}
+                {filter.value === 'unread' && unreadCount > 0 && (
+                  <span>{unreadCount > 99 ? '99+' : unreadCount}</span>
+                )}
+              </button>
+            ))}
+          </div>
+
           {error && <div className="notification-error">{error}</div>}
 
           <div className="notification-list">
             {loading ? (
               <div className="notification-empty">Loading notifications...</div>
-            ) : notifications.length === 0 ? (
-              <div className="notification-empty">No notifications yet</div>
+            ) : visibleNotifications.length === 0 ? (
+              <div className="notification-empty">
+                <strong>{emptyState.title}</strong>
+                <span>{emptyState.body}</span>
+              </div>
             ) : (
-              notifications.map((notification) => (
+              visibleNotifications.map((notification) => (
                 <button
                   key={notification.id}
                   type="button"
