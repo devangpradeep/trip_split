@@ -2,6 +2,15 @@
 
 module Notifications
   class Creator
+    EVENT_PREFERENCE_ATTRIBUTES = {
+      'expense_created' => :notify_expense_created,
+      'expense_updated' => :notify_expense_updated,
+      'expense_deleted' => :notify_expense_deleted,
+      'settlement_created' => :notify_settlement_created,
+      'settlement_deleted' => :notify_settlement_deleted,
+      'group_member_added' => :notify_group_member_added
+    }.freeze
+
     def self.call(**attributes)
       new(attributes).call
     end
@@ -43,7 +52,16 @@ module Notifications
     end
 
     def recipients
-      @recipients.uniq(&:id).reject { |recipient| recipient.id == actor&.id }
+      @recipients.uniq(&:id)
+                 .reject { |recipient| recipient.id == actor&.id }
+                 .select { |recipient| notification_enabled?(recipient) }
+    end
+
+    def notification_enabled?(recipient)
+      preference_attribute = EVENT_PREFERENCE_ATTRIBUTES[event_type]
+      return true unless preference_attribute
+
+      recipient.public_send(preference_attribute)
     end
   end
 end

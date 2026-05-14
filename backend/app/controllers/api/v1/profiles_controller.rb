@@ -27,7 +27,8 @@ module Api
           :bank_account_holder_name,
           :bank_name,
           :bank_account_number,
-          :bank_ifsc
+          :bank_ifsc,
+          *User::NOTIFICATION_PREFERENCE_ATTRIBUTES
         )
       end
 
@@ -43,8 +44,15 @@ module Api
           bank_name: user.bank_name,
           bank_account_number: user.bank_account_number,
           bank_account_number_masked: masked_account_number(user.bank_account_number),
-          bank_ifsc: user.bank_ifsc
+          bank_ifsc: user.bank_ifsc,
+          notification_preferences: notification_preferences(user)
         }
+      end
+
+      def notification_preferences(user)
+        User::NOTIFICATION_PREFERENCE_ATTRIBUTES.index_with do |attribute|
+          user.public_send(attribute)
+        end
       end
 
       def masked_account_number(account_number)
