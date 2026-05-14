@@ -1,9 +1,57 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Check, Copy, CreditCard, Pencil, Save, UserCircle } from 'lucide-react';
+import { ArrowLeft, Bell, Check, CheckCircle2, Copy, CreditCard, Save, UserCircle, XCircle } from 'lucide-react';
 import { profileApi } from '../lib/api';
 import { useAuth } from '../contexts/useAuth';
 import NotificationBell from '../components/NotificationBell';
+
+const NOTIFICATION_PREFERENCE_GROUPS = [
+  {
+    title: 'Expenses',
+    options: [
+      {
+        field: 'notify_expense_created',
+        label: 'New expenses',
+        description: 'When someone adds an expense to a group you share.'
+      },
+      {
+        field: 'notify_expense_updated',
+        label: 'Expense edits',
+        description: 'When an existing expense is changed.'
+      },
+      {
+        field: 'notify_expense_deleted',
+        label: 'Expense deletions',
+        description: 'When an expense is removed from a group.'
+      }
+    ]
+  },
+  {
+    title: 'Settlements',
+    options: [
+      {
+        field: 'notify_settlement_created',
+        label: 'New settlements',
+        description: 'When a settlement is recorded with you.'
+      },
+      {
+        field: 'notify_settlement_deleted',
+        label: 'Settlement deletions',
+        description: 'When a settlement involving you is removed.'
+      }
+    ]
+  },
+  {
+    title: 'Groups',
+    options: [
+      {
+        field: 'notify_group_member_added',
+        label: 'Added to a group',
+        description: 'When someone adds you to a group.'
+      }
+    ]
+  }
+];
 
 const emptyProfileForm = {
   name: '',
@@ -12,7 +60,13 @@ const emptyProfileForm = {
   bank_account_holder_name: '',
   bank_name: '',
   bank_account_number: '',
-  bank_ifsc: ''
+  bank_ifsc: '',
+  notify_expense_created: true,
+  notify_expense_updated: true,
+  notify_expense_deleted: true,
+  notify_settlement_created: true,
+  notify_settlement_deleted: true,
+  notify_group_member_added: true
 };
 
 const serverErrorMessage = (error, fallback) => {
@@ -24,16 +78,42 @@ const serverErrorMessage = (error, fallback) => {
 
 const OptionalBadge = () => <span className="field-optional">Optional</span>;
 
+const PROFILE_SECTIONS = [
+  { id: 'basic', label: 'Basic' },
+  { id: 'payment', label: 'Payment' },
+  { id: 'notifications', label: 'Notifications' }
+];
+
+const buildNotificationPreferences = (preferences = {}) => (
+  NOTIFICATION_PREFERENCE_GROUPS
+    .flatMap((group) => group.options)
+    .reduce((formPreferences, option) => ({
+      ...formPreferences,
+      [option.field]: preferences[option.field] ?? true
+    }), {})
+);
+
 const Profile = () => {
   const { user, updateUser } = useAuth();
   const [profile, setProfile] = useState(null);
   const [profileForm, setProfileForm] = useState(emptyProfileForm);
   const [loading, setLoading] = useState(true);
-  const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [savingPreference, setSavingPreference] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [copiedField, setCopiedField] = useState('');
+  const [activeProfileSection, setActiveProfileSection] = useState('basic');
+
+  useEffect(() => {
+    if (!success) return undefined;
+
+    const timeoutId = window.setTimeout(() => {
+      setSuccess('');
+    }, 2600);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [success]);
 
   useEffect(() => {
     document.title = 'Profile | Tripsplit';
@@ -67,7 +147,8 @@ const Profile = () => {
     bank_account_holder_name: nextProfile?.bank_account_holder_name || '',
     bank_name: nextProfile?.bank_name || '',
     bank_account_number: nextProfile?.bank_account_number || '',
-    bank_ifsc: nextProfile?.bank_ifsc || ''
+    bank_ifsc: nextProfile?.bank_ifsc || '',
+    ...buildNotificationPreferences(nextProfile?.notification_preferences)
   });
 
   const updateField = (field, value) => {
@@ -78,7 +159,6 @@ const Profile = () => {
 
   const handleCancel = () => {
     setProfileForm(buildForm(profile));
-    setEditing(false);
     setError('');
     setSuccess('');
   };
@@ -101,12 +181,35 @@ const Profile = () => {
         email: nextProfile.email,
         avatar_url: nextProfile.avatar_url
       });
-      setEditing(false);
-      setSuccess('Profile saved');
+      setSuccess('Changes saved');
     } catch (saveError) {
       setError(serverErrorMessage(saveError, 'Failed to save profile'));
     } finally {
       setSaving(false);
+    }
+  };
+
+  const updateNotificationPreference = async (field, checked) => {
+    const previousValue = profileForm[field];
+    setProfileForm((prev) => ({ ...prev, [field]: checked }));
+    setSavingPreference(field);
+    setError('');
+    setSuccess('');
+
+    try {
+      const response = await profileApi.update({ [field]: checked });
+      const nextProfile = response.data.user;
+      setProfile(nextProfile);
+      setProfileForm((prev) => ({
+        ...prev,
+        ...buildNotificationPreferences(nextProfile.notification_preferences)
+      }));
+      setSuccess('Preference updated');
+    } catch (saveError) {
+      setProfileForm((prev) => ({ ...prev, [field]: previousValue }));
+      setError(serverErrorMessage(saveError, 'Failed to save notification preference'));
+    } finally {
+      setSavingPreference('');
     }
   };
 
@@ -127,7 +230,6 @@ const Profile = () => {
   if (loading) return <div className="container text-center pt-20">Loading profile...</div>;
 
   const displayName = profile?.name || user?.name || 'Your profile';
-  const accountNumberDisplay = profile?.bank_account_number_masked || '';
 
   return (
     <div className="container profile-page">
@@ -138,22 +240,31 @@ const Profile = () => {
           </Link>
           <div>
             <h1 className="text-title" style={{ fontSize: '2rem' }}>Profile</h1>
-            <p className="text-secondary">Manage your identity and private payment details.</p>
+            <p className="text-secondary">Manage your account information and preferences.</p>
           </div>
         </div>
 
         <div className="profile-header-actions">
           <NotificationBell />
-          {!editing && (
-            <button type="button" className="btn btn-primary" onClick={() => setEditing(true)}>
-              <Pencil size={17} /> Edit
-            </button>
-          )}
         </div>
       </div>
 
-      {error && <div className="error-text profile-status">{error}</div>}
-      {success && <div className="settings-success-text profile-status">{success}</div>}
+      {(error || success) && (
+        <div className={`profile-toast ${error ? 'error' : 'success'}`} role="status">
+          {error ? <XCircle size={17} /> : <CheckCircle2 size={17} />}
+          <span>{error || success}</span>
+          <button
+            type="button"
+            onClick={() => {
+              setError('');
+              setSuccess('');
+            }}
+            aria-label="Dismiss status"
+          >
+            ×
+          </button>
+        </div>
+      )}
 
       <div className="profile-layout">
         <section className="glass-panel profile-summary-panel">
@@ -167,7 +278,26 @@ const Profile = () => {
         </section>
 
         <form onSubmit={handleSave} className="profile-details-stack">
-          <section className="glass-panel profile-section">
+          <div className="profile-section-tabs" role="tablist" aria-label="Profile sections">
+            {PROFILE_SECTIONS.map((section) => (
+              <button
+                key={section.id}
+                type="button"
+                role="tab"
+                className={`profile-section-tab ${activeProfileSection === section.id ? 'active' : ''}`}
+                aria-selected={activeProfileSection === section.id}
+                onClick={() => setActiveProfileSection(section.id)}
+              >
+                {section.label}
+              </button>
+            ))}
+          </div>
+
+          <section
+            className="glass-panel profile-section profile-tab-panel"
+            role="tabpanel"
+            hidden={activeProfileSection !== 'basic'}
+          >
             <div className="profile-section-header">
               <div>
                 <h2><UserCircle size={20} /> Basic Details</h2>
@@ -181,7 +311,7 @@ const Profile = () => {
                 <input
                   value={profileForm.name}
                   onChange={(event) => updateField('name', event.target.value)}
-                  disabled={!editing || saving}
+                  disabled={saving}
                   required
                 />
               </div>
@@ -194,7 +324,7 @@ const Profile = () => {
                 <input
                   value={profileForm.phone}
                   onChange={(event) => updateField('phone', event.target.value)}
-                  disabled={!editing || saving}
+                  disabled={saving}
                   inputMode="tel"
                   placeholder="9876543210"
                 />
@@ -202,7 +332,11 @@ const Profile = () => {
             </div>
           </section>
 
-          <section className="glass-panel profile-section">
+          <section
+            className="glass-panel profile-section profile-tab-panel"
+            role="tabpanel"
+            hidden={activeProfileSection !== 'payment'}
+          >
             <div className="profile-section-header">
               <div>
                 <h2><CreditCard size={20} /> Payment Details</h2>
@@ -217,11 +351,11 @@ const Profile = () => {
                   <input
                     value={profileForm.upi_id}
                     onChange={(event) => updateField('upi_id', event.target.value)}
-                    disabled={!editing || saving}
+                    disabled={saving}
                     placeholder="name@bank"
                   />
-                  {!editing && profile?.upi_id && (
-                    <button type="button" className="btn btn-secondary" onClick={() => copyValue('upi', profile.upi_id)}>
+                  {profileForm.upi_id && (
+                    <button type="button" className="btn btn-secondary" onClick={() => copyValue('upi', profileForm.upi_id)}>
                       {copiedField === 'upi' ? <Check size={16} /> : <Copy size={16} />}
                     </button>
                   )}
@@ -232,7 +366,7 @@ const Profile = () => {
                 <input
                   value={profileForm.bank_account_holder_name}
                   onChange={(event) => updateField('bank_account_holder_name', event.target.value)}
-                  disabled={!editing || saving}
+                  disabled={saving}
                   placeholder="John Doe"
                 />
               </div>
@@ -241,7 +375,7 @@ const Profile = () => {
                 <input
                   value={profileForm.bank_name}
                   onChange={(event) => updateField('bank_name', event.target.value)}
-                  disabled={!editing || saving}
+                  disabled={saving}
                   placeholder="Example Bank"
                 />
               </div>
@@ -249,17 +383,17 @@ const Profile = () => {
                 <label>Account Number <OptionalBadge /></label>
                 <div className="profile-copy-row">
                   <input
-                    value={editing ? profileForm.bank_account_number : accountNumberDisplay}
+                    value={profileForm.bank_account_number}
                     onChange={(event) => updateField('bank_account_number', event.target.value)}
-                    disabled={!editing || saving}
+                    disabled={saving}
                     inputMode="numeric"
                     placeholder="123456789012"
                   />
-                  {!editing && profile?.bank_account_number && (
+                  {profileForm.bank_account_number && (
                     <button
                       type="button"
                       className="btn btn-secondary"
-                      onClick={() => copyValue('account', profile.bank_account_number)}
+                      onClick={() => copyValue('account', profileForm.bank_account_number)}
                     >
                       {copiedField === 'account' ? <Check size={16} /> : <Copy size={16} />}
                     </button>
@@ -272,11 +406,11 @@ const Profile = () => {
                   <input
                     value={profileForm.bank_ifsc}
                     onChange={(event) => updateField('bank_ifsc', event.target.value)}
-                    disabled={!editing || saving}
+                    disabled={saving}
                     placeholder="ABCD0123456"
                   />
-                  {!editing && profile?.bank_ifsc && (
-                    <button type="button" className="btn btn-secondary" onClick={() => copyValue('ifsc', profile.bank_ifsc)}>
+                  {profileForm.bank_ifsc && (
+                    <button type="button" className="btn btn-secondary" onClick={() => copyValue('ifsc', profileForm.bank_ifsc)}>
                       {copiedField === 'ifsc' ? <Check size={16} /> : <Copy size={16} />}
                     </button>
                   )}
@@ -285,13 +419,51 @@ const Profile = () => {
             </div>
           </section>
 
-          {editing && (
+          <section
+            className="glass-panel profile-section profile-tab-panel"
+            role="tabpanel"
+            hidden={activeProfileSection !== 'notifications'}
+          >
+            <div className="profile-section-header">
+              <div>
+                <h2><Bell size={20} /> Notification Preferences</h2>
+                <p>Choose which in-app notifications you receive.</p>
+              </div>
+            </div>
+
+            <div className="profile-preferences-grid">
+              {NOTIFICATION_PREFERENCE_GROUPS.map((preferenceGroup) => (
+                <div key={preferenceGroup.title} className="profile-preference-group">
+                  <h3>{preferenceGroup.title}</h3>
+                  <div className="profile-preference-list">
+                    {preferenceGroup.options.map((option) => (
+                      <label key={option.field} className="profile-preference-toggle">
+                        <span>
+                          <strong>{option.label}</strong>
+                          <span>{option.description}</span>
+                        </span>
+                        <input
+                          type="checkbox"
+                          checked={Boolean(profileForm[option.field])}
+                          onChange={(event) => updateNotificationPreference(option.field, event.target.checked)}
+                          disabled={saving || savingPreference === option.field}
+                        />
+                        <span className="profile-switch" aria-hidden="true" />
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {activeProfileSection !== 'notifications' && (
             <div className="profile-actions">
               <button type="submit" className="btn btn-primary" disabled={saving}>
                 <Save size={17} /> {saving ? 'Saving...' : 'Save Profile'}
               </button>
               <button type="button" className="btn btn-secondary" onClick={handleCancel} disabled={saving}>
-                Cancel
+                Reset Changes
               </button>
             </div>
           )}

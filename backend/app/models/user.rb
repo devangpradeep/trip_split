@@ -8,6 +8,14 @@ class User < ApplicationRecord
     bank_account_number
     bank_ifsc
   ].freeze
+  NOTIFICATION_PREFERENCE_ATTRIBUTES = %i[
+    notify_expense_created
+    notify_expense_updated
+    notify_expense_deleted
+    notify_settlement_created
+    notify_settlement_deleted
+    notify_group_member_added
+  ].freeze
 
   # Include default devise modules. Others available are:
   # :confirmable, :lockable, :timeoutable, :trackable and :omniauthable
