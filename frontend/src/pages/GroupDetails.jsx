@@ -2,10 +2,30 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import api, { groupInvitesApi, groupMembersApi, groupsApi } from '../lib/api';
 import { useAuth } from '../contexts/useAuth';
-import { ArrowLeft, Plus, Receipt, UserPlus, Pencil, Trash2, CalendarDays, Settings, Archive, RotateCcw } from 'lucide-react';
+import {
+  ArrowLeft,
+  Plus,
+  Receipt,
+  UserPlus,
+  Pencil,
+  Trash2,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Settings,
+  Archive,
+  RotateCcw
+} from 'lucide-react';
 import NotificationBell from '../components/NotificationBell';
 
-const todayISO = () => new Date().toISOString().split('T')[0];
+const todayISO = () => {
+  const date = new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+
+  return `${year}-${month}-${day}`;
+};
 const FRIEND_SUGGESTION_DEBOUNCE_MS = 220;
 const GROUP_DATA_POLL_INTERVAL_MS = 10000;
 
@@ -53,6 +73,56 @@ const parseUIDateToISO = (displayDate) => {
   return isValidISODate(isoDate) ? isoDate : null;
 };
 
+const monthLabelFormatter = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' });
+const weekdayLabels = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+
+const isoDateToLocalDate = (isoDate) => {
+  if (!isValidISODate(isoDate)) return new Date();
+
+  const [year, month, day] = isoDate.split('-').map(Number);
+  return new Date(year, month - 1, day);
+};
+
+const localDateToISO = (date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+
+  return `${year}-${month}-${day}`;
+};
+
+const formatExpenseDateLabel = (isoDate) => {
+  if (!isValidISODate(isoDate)) return '';
+
+  const expenseDate = isoDateToLocalDate(isoDate);
+  const today = isoDateToLocalDate(todayISO());
+  const dayDiff = Math.round((today - expenseDate) / 86400000);
+
+  if (dayDiff === 0) return 'Today';
+  if (dayDiff === 1) return 'Yesterday';
+  if (dayDiff > 1 && dayDiff < 7) {
+    return expenseDate.toLocaleDateString('en-US', { weekday: 'long' });
+  }
+
+  return expenseDate.toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: expenseDate.getFullYear() === today.getFullYear() ? undefined : 'numeric'
+  });
+};
+
+const buildCalendarDays = (viewDate) => {
+  const firstOfMonth = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1);
+  const calendarStart = new Date(firstOfMonth);
+  calendarStart.setDate(firstOfMonth.getDate() - firstOfMonth.getDay());
+
+  return Array.from({ length: 42 }, (_item, index) => {
+    const date = new Date(calendarStart);
+    date.setDate(calendarStart.getDate() + index);
+    return date;
+  });
+};
+
 const formatDateTimeForUI = (value) => {
   if (!value) return '--';
 
@@ -62,13 +132,22 @@ const formatDateTimeForUI = (value) => {
   return date.toLocaleString();
 };
 
+const orderMembersWithUserLast = (members = [], currentUserId = '') => [
+  ...members.filter((member) => member.id !== currentUserId),
+  ...members.filter((member) => member.id === currentUserId)
+];
+
+const findRemainderSplit = (includedSplits, editedUserId) => (
+  [...includedSplits].reverse().find((split) => split.user_id !== editedUserId)
+);
+
 const buildDefaultExpenseForm = (members = [], paidById = '') => ({
   description: '',
   amount: '',
   date: todayISO(),
   paid_by_id: paidById,
   split_type: 'equal',
-  splits: members.map((member) => ({
+  splits: orderMembersWithUserLast(members, paidById).map((member) => ({
     user_id: member.id,
     name: member.name,
     included: true,
@@ -141,17 +220,50 @@ const CustomSelect = ({ value, options, onChange, disabled = false }) => {
 
 const CustomDateInput = ({ value, onChange, required = false, disabled = false }) => {
   const [displayValue, setDisplayValue] = useState(formatISODateForUI(value));
-  const proxyDateInputRef = useRef(null);
+  const [open, setOpen] = useState(false);
+  const [viewDate, setViewDate] = useState(isoDateToLocalDate(value));
+  const rootRef = useRef(null);
+  const selectedISODate = isValidISODate(value) ? value : '';
+  const viewMonth = viewDate.getMonth();
 
   useEffect(() => {
     setDisplayValue(formatISODateForUI(value));
+    setViewDate(isoDateToLocalDate(value));
   }, [value]);
+
+  useEffect(() => {
+    const handleDocumentClick = (event) => {
+      if (!rootRef.current?.contains(event.target)) {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleDocumentClick);
+    document.addEventListener('touchstart', handleDocumentClick);
+
+    return () => {
+      document.removeEventListener('mousedown', handleDocumentClick);
+      document.removeEventListener('touchstart', handleDocumentClick);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, []);
 
   const commitValue = () => {
     const parsedDate = parseUIDateToISO(displayValue);
     if (parsedDate) {
       onChange(parsedDate);
       setDisplayValue(formatISODateForUI(parsedDate));
+      setViewDate(isoDateToLocalDate(parsedDate));
       return;
     }
 
@@ -160,18 +272,23 @@ const CustomDateInput = ({ value, onChange, required = false, disabled = false }
 
   const openDatePicker = () => {
     if (disabled) return;
+    setOpen((prev) => !prev);
+  };
 
-    if (typeof proxyDateInputRef.current?.showPicker === 'function') {
-      proxyDateInputRef.current.showPicker();
-      return;
-    }
+  const changeMonth = (offset) => {
+    setViewDate((prev) => new Date(prev.getFullYear(), prev.getMonth() + offset, 1));
+  };
 
-    proxyDateInputRef.current?.focus();
-    proxyDateInputRef.current?.click();
+  const selectDate = (date) => {
+    const nextDate = localDateToISO(date);
+    onChange(nextDate);
+    setDisplayValue(formatISODateForUI(nextDate));
+    setViewDate(date);
+    setOpen(false);
   };
 
   return (
-    <div className="custom-date-input">
+    <div ref={rootRef} className="custom-date-input">
       <input
         type="text"
         className="custom-date-text-input"
@@ -182,7 +299,9 @@ const CustomDateInput = ({ value, onChange, required = false, disabled = false }
         onBlur={commitValue}
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
+            e.preventDefault();
             commitValue();
+            setOpen(false);
           }
         }}
         required={required}
@@ -199,20 +318,49 @@ const CustomDateInput = ({ value, onChange, required = false, disabled = false }
       >
         <CalendarDays size={16} />
       </button>
-      <input
-        ref={proxyDateInputRef}
-        type="date"
-        className="custom-date-native-proxy"
-        value={value || ''}
-        onChange={(e) => {
-          const nextValue = e.target.value;
-          if (!nextValue) return;
-          onChange(nextValue);
-          setDisplayValue(formatISODateForUI(nextValue));
-        }}
-        tabIndex={-1}
-        aria-hidden="true"
-      />
+      {open && (
+        <div className="custom-date-calendar" role="dialog" aria-label="Choose date">
+          <div className="custom-date-calendar-header">
+            <button type="button" className="custom-date-nav-btn" onClick={() => changeMonth(-1)} aria-label="Previous month">
+              <ChevronLeft size={17} />
+            </button>
+            <div className="custom-date-month-label">{monthLabelFormatter.format(viewDate)}</div>
+            <button type="button" className="custom-date-nav-btn" onClick={() => changeMonth(1)} aria-label="Next month">
+              <ChevronRight size={17} />
+            </button>
+          </div>
+          <div className="custom-date-weekdays" aria-hidden="true">
+            {weekdayLabels.map((label, index) => (
+              <span key={`${label}-${index}`}>{label}</span>
+            ))}
+          </div>
+          <div className="custom-date-grid">
+            {buildCalendarDays(viewDate).map((date) => {
+              const isoDate = localDateToISO(date);
+              const isSelected = isoDate === selectedISODate;
+              const isToday = isoDate === todayISO();
+              const isOutsideMonth = date.getMonth() !== viewMonth;
+
+              return (
+                <button
+                  key={isoDate}
+                  type="button"
+                  className={`custom-date-day ${isSelected ? 'selected' : ''} ${isToday ? 'today' : ''} ${isOutsideMonth ? 'muted' : ''}`}
+                  onClick={() => selectDate(date)}
+                  aria-pressed={isSelected}
+                >
+                  {date.getDate()}
+                </button>
+              );
+            })}
+          </div>
+          <div className="custom-date-calendar-footer">
+            <button type="button" className="custom-date-footer-btn" onClick={() => selectDate(new Date())}>
+              Today
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -376,7 +524,7 @@ const GroupDetails = () => {
 
     setExpenseForm((prev) => {
       const prevSplitsByUserId = new Map(prev.splits.map((split) => [split.user_id, split]));
-      const nextSplits = group.members.map((member) => {
+      const nextSplits = orderMembersWithUserLast(group.members, user.id).map((member) => {
         const existing = prevSplitsByUserId.get(member.id);
         return existing
           ? { ...existing, name: member.name }
@@ -385,7 +533,7 @@ const GroupDetails = () => {
 
       return { ...prev, splits: nextSplits };
     });
-  }, [group, showAddExpense]);
+  }, [group, showAddExpense, user.id]);
 
   const handleAddExpense = async (e) => {
     e.preventDefault();
@@ -484,13 +632,7 @@ const GroupDetails = () => {
       const includedSplits = prev.splits.filter((split) => split.included);
       if (includedSplits.length < 2) return prev;
 
-      const preferredAutoSplit = includedSplits.find(
-        (split) => split.user_id === user.id && split.user_id !== editedUserId
-      );
-      const fallbackAutoSplit = includedSplits.find(
-        (split) => split.user_id !== editedUserId
-      );
-      const autoSplit = preferredAutoSplit || fallbackAutoSplit;
+      const autoSplit = findRemainderSplit(includedSplits, editedUserId);
       if (!autoSplit) return prev;
 
       const targetTotal =
@@ -931,7 +1073,7 @@ const GroupDetails = () => {
       expense.expense_splits.map((split) => [split.user.id, split])
     );
 
-    const formSplits = group.members.map((member) => {
+    const formSplits = orderMembersWithUserLast(group.members, user.id).map((member) => {
       const existingSplit = splitsByUserId.get(member.id);
       const splitAmount = existingSplit ? parseFloat(existingSplit.amount || 0) : 0;
       const splitPercentage = totalAmount > 0 ? (splitAmount / totalAmount) * 100 : 0;
@@ -983,13 +1125,7 @@ const GroupDetails = () => {
       const includedSplits = prev.splits.filter((split) => split.included);
       if (includedSplits.length < 2) return prev;
 
-      const preferredAutoSplit = includedSplits.find(
-        (split) => split.user_id === user.id && split.user_id !== editedUserId
-      );
-      const fallbackAutoSplit = includedSplits.find(
-        (split) => split.user_id !== editedUserId
-      );
-      const autoSplit = preferredAutoSplit || fallbackAutoSplit;
+      const autoSplit = findRemainderSplit(includedSplits, editedUserId);
       if (!autoSplit) return prev;
 
       const targetTotal =
@@ -1155,6 +1291,7 @@ const GroupDetails = () => {
   if (!group) return <div className="container text-center pt-20">Group not found</div>;
 
   const currencySym = group.currency === 'INR' ? '₹' : (group.currency === 'USD' ? '$' : '€');
+  const totalGroupExpense = expenses.reduce((sum, expense) => sum + (parseFloat(expense.amount) || 0), 0);
   const isArchived = group.status === 'archived' || Boolean(group.archived_at);
   const isGroupOwner = group.created_by_id === user.id;
   const canManageMembers = isGroupOwner && !isArchived;
@@ -1178,6 +1315,20 @@ const GroupDetails = () => {
     ...group.members.filter((member) => member.id !== user.id),
     ...group.members.filter((member) => member.id === user.id)
   ];
+  const expenseShareTotalsByUserId = expenses.reduce((totals, expense) => {
+    (expense.expense_splits || []).forEach((split) => {
+      const splitUserId = split.user?.id || split.user_id;
+      if (!splitUserId) return;
+
+      totals[splitUserId] = (totals[splitUserId] || 0) + (parseFloat(split.amount) || 0);
+    });
+
+    return totals;
+  }, {});
+  const expenseShares = orderedMembers.map((member) => ({
+    ...member,
+    share: expenseShareTotalsByUserId[member.id] || 0
+  }));
   const existingMemberEmails = new Set(
     group.members.map((member) => member.email?.trim().toLowerCase()).filter(Boolean)
   );
@@ -1317,23 +1468,28 @@ const GroupDetails = () => {
     <div className="container flex-col gap-6" style={{ paddingBottom: '5rem' }}>
       {/* Header */}
       <div className="group-header-row">
-        <div className="flex items-center gap-4">
-          <Link to="/" className="btn btn-secondary" style={{ padding: '0.5rem', borderRadius: '50%' }}>
+        <div className="group-header-main">
+          <Link to="/" className="btn btn-secondary group-back-btn" aria-label="Back to groups">
             <ArrowLeft size={20} />
           </Link>
-          <div>
+          <div className="group-header-copy">
             <div className="group-title-line">
-              <h1 className="text-title" style={{ fontSize: '2rem' }}>{group.name}</h1>
+              <h1 className="text-title group-title">{group.name}</h1>
               {isArchived && <span className="archive-status-badge"><Archive size={13} /> Archived</span>}
             </div>
-            <p className="text-secondary">{group.members.length} members • {group.currency}</p>
+            <div className="group-header-meta">
+              <span>{group.members.length} members</span>
+              <span>{group.currency}</span>
+              <span>{currencySym}{totalGroupExpense.toFixed(2)} total</span>
+            </div>
           </div>
         </div>
         <div className="group-header-actions">
           <NotificationBell />
           {canManageGroupSettings && (
-            <button type="button" className="btn btn-secondary group-settings-btn" onClick={openGroupSettings}>
-              <Settings size={18} /> Settings
+            <button type="button" className="btn btn-secondary group-settings-btn" onClick={openGroupSettings} aria-label="Group settings" title="Group settings">
+              <Settings size={18} />
+              <span className="group-settings-label">Settings</span>
             </button>
           )}
         </div>
@@ -1526,11 +1682,15 @@ const GroupDetails = () => {
                       <div className="expense-subtitle">
                         {expense.paid_by.id === user.id ? 'You' : expense.paid_by.name} paid {currencySym}{parseFloat(expense.amount).toFixed(2)}
                       </div>
-                      {expense.created_by && (
-                        <div className="expense-subtitle">
-                          Added by {expense.created_by.id === user.id ? 'You' : expense.created_by.name}
-                        </div>
-                      )}
+                      <div className="expense-subtitle expense-date-meta">
+                        {formatExpenseDateLabel(expense.date)}
+                        {expense.created_by && (
+                          <>
+                            <span aria-hidden="true">•</span>
+                            Added by {expense.created_by.id === user.id ? 'You' : expense.created_by.name}
+                          </>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <div className="text-right expense-side">
@@ -1599,6 +1759,24 @@ const GroupDetails = () => {
             <div className="flex flex-col gap-3">
               {orderedBalances.map(b => renderBalanceCard(b))}
             </div>
+
+            <div className="expense-shares-panel">
+              <div className="expense-shares-header">
+                <h3>Expense shares</h3>
+                <span>Based on all splits</span>
+              </div>
+              <div className="expense-share-list">
+                {expenseShares.map((member) => (
+                  <div key={member.id} className="expense-share-row">
+                    <div className="expense-share-person">
+                      <div className="expense-share-avatar">{member.name.charAt(0)}</div>
+                      <span>{member.id === user.id ? 'You' : member.name}</span>
+                    </div>
+                    <strong>{currencySym}{member.share.toFixed(2)}</strong>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
 
           <div className={`group-section ${mobileSection === 'members' ? 'active' : ''}`}>
@@ -1614,26 +1792,23 @@ const GroupDetails = () => {
                 <UserPlus size={18} />
               </button>
             </h2>
-            <div className="glass-panel flex flex-col gap-3" style={{ padding: '1rem 1.5rem' }}>
+            <div className="glass-panel group-members-card">
               {removeMemberSuccess && <div className="settings-success-text" style={{ margin: 0 }}>{removeMemberSuccess}</div>}
               {removeMemberError && !pendingRemoveMember && (
                 <div className="error-text" style={{ margin: 0 }}>{removeMemberError}</div>
               )}
               {orderedMembers.map(member => (
-                <div key={member.id} className="flex items-center gap-3" style={{ justifyContent: 'space-between' }}>
-                  <div className="flex items-center gap-3" style={{ minWidth: 0 }}>
-                    <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.85rem', flexShrink: 0 }}>
-                      {member.name.charAt(0)}
-                    </div>
-                    <span style={{ fontSize: '0.95rem', minWidth: 0 }}>{member.id === user.id ? 'You' : member.name}</span>
+                <div key={member.id} className="group-member-row">
+                  <div className="group-member-person">
+                    <div className="group-member-avatar">{member.name.charAt(0)}</div>
+                    <span>{member.id === user.id ? 'You' : member.name}</span>
                   </div>
                   {member.can_remove && (
                     <button
                       type="button"
-                      className="btn btn-danger"
+                      className="btn btn-danger group-member-remove-btn"
                       onClick={() => openRemoveMemberConfirm(member)}
                       title={`Remove ${member.name} from group`}
-                      style={{ padding: '0.4rem 0.5rem' }}
                     >
                       <Trash2 size={16} />
                     </button>
@@ -1787,7 +1962,9 @@ const GroupDetails = () => {
               </div>
 
               <div className="form-group" style={{ marginBottom: 0 }}>
-                <label>Description</label>
+                <label>
+                  Description <span className="field-optional">Optional</span>
+                </label>
                 <textarea
                   rows={3}
                   value={groupSettingsForm.description}

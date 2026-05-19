@@ -10,6 +10,9 @@ Rails.application.routes.draw do
 
   namespace :api do
     namespace :v1 do
+      # Token validation — called by the frontend on every cold app load
+      get 'auth/me', to: 'auth#me'
+
       get 'invites/:token', to: 'group_invites#show'
       post 'invites/:token/accept', to: 'group_invites#accept'
       resource :profile, only: %i[show update]
