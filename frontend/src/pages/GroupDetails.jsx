@@ -1294,6 +1294,7 @@ const GroupDetails = () => {
   if (!group) return <div className="container text-center pt-20">Group not found</div>;
 
   const currencySym = group.currency === 'INR' ? '₹' : (group.currency === 'USD' ? '$' : '€');
+  const totalGroupExpense = expenses.reduce((sum, expense) => sum + (parseFloat(expense.amount) || 0), 0);
   const isArchived = group.status === 'archived' || Boolean(group.archived_at);
   const isGroupOwner = group.created_by_id === user.id;
   const canManageMembers = isGroupOwner && !isArchived;
@@ -1317,6 +1318,20 @@ const GroupDetails = () => {
     ...group.members.filter((member) => member.id !== user.id),
     ...group.members.filter((member) => member.id === user.id)
   ];
+  const expenseShareTotalsByUserId = expenses.reduce((totals, expense) => {
+    (expense.expense_splits || []).forEach((split) => {
+      const splitUserId = split.user?.id || split.user_id;
+      if (!splitUserId) return;
+
+      totals[splitUserId] = (totals[splitUserId] || 0) + (parseFloat(split.amount) || 0);
+    });
+
+    return totals;
+  }, {});
+  const expenseShares = orderedMembers.map((member) => ({
+    ...member,
+    share: expenseShareTotalsByUserId[member.id] || 0
+  }));
   const existingMemberEmails = new Set(
     group.members.map((member) => member.email?.trim().toLowerCase()).filter(Boolean)
   );
@@ -1465,7 +1480,11 @@ const GroupDetails = () => {
               <h1 className="text-title" style={{ fontSize: '2rem' }}>{group.name}</h1>
               {isArchived && <span className="archive-status-badge"><Archive size={13} /> Archived</span>}
             </div>
-            <p className="text-secondary">{group.members.length} members • {group.currency}</p>
+            <div className="group-header-meta">
+              <span>{group.members.length} members</span>
+              <span>{group.currency}</span>
+              <span>{currencySym}{totalGroupExpense.toFixed(2)} total</span>
+            </div>
           </div>
         </div>
         <div className="group-header-actions">
@@ -1742,6 +1761,24 @@ const GroupDetails = () => {
             <div className="flex flex-col gap-3">
               {orderedBalances.map(b => renderBalanceCard(b))}
             </div>
+
+            <div className="expense-shares-panel">
+              <div className="expense-shares-header">
+                <h3>Expense shares</h3>
+                <span>Based on all splits</span>
+              </div>
+              <div className="expense-share-list">
+                {expenseShares.map((member) => (
+                  <div key={member.id} className="expense-share-row">
+                    <div className="expense-share-person">
+                      <div className="expense-share-avatar">{member.name.charAt(0)}</div>
+                      <span>{member.id === user.id ? 'You' : member.name}</span>
+                    </div>
+                    <strong>{currencySym}{member.share.toFixed(2)}</strong>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
 
           <div className={`group-section ${mobileSection === 'members' ? 'active' : ''}`}>
@@ -1757,26 +1794,23 @@ const GroupDetails = () => {
                 <UserPlus size={18} />
               </button>
             </h2>
-            <div className="glass-panel flex flex-col gap-3" style={{ padding: '1rem 1.5rem' }}>
+            <div className="glass-panel group-members-card">
               {removeMemberSuccess && <div className="settings-success-text" style={{ margin: 0 }}>{removeMemberSuccess}</div>}
               {removeMemberError && !pendingRemoveMember && (
                 <div className="error-text" style={{ margin: 0 }}>{removeMemberError}</div>
               )}
               {orderedMembers.map(member => (
-                <div key={member.id} className="flex items-center gap-3" style={{ justifyContent: 'space-between' }}>
-                  <div className="flex items-center gap-3" style={{ minWidth: 0 }}>
-                    <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.85rem', flexShrink: 0 }}>
-                      {member.name.charAt(0)}
-                    </div>
-                    <span style={{ fontSize: '0.95rem', minWidth: 0 }}>{member.id === user.id ? 'You' : member.name}</span>
+                <div key={member.id} className="group-member-row">
+                  <div className="group-member-person">
+                    <div className="group-member-avatar">{member.name.charAt(0)}</div>
+                    <span>{member.id === user.id ? 'You' : member.name}</span>
                   </div>
                   {member.can_remove && (
                     <button
                       type="button"
-                      className="btn btn-danger"
+                      className="btn btn-danger group-member-remove-btn"
                       onClick={() => openRemoveMemberConfirm(member)}
                       title={`Remove ${member.name} from group`}
-                      style={{ padding: '0.4rem 0.5rem' }}
                     >
                       <Trash2 size={16} />
                     </button>
