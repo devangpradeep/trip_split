@@ -1915,11 +1915,35 @@ body.app-installed {
   flex-shrink: 0;
 }
 
+.group-header-main {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.group-back-btn {
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.group-header-copy {
+  min-width: 0;
+}
+
 .group-title-line {
   display: flex;
   align-items: center;
   gap: 0.7rem;
   flex-wrap: wrap;
+}
+
+.group-title {
+  font-size: 2rem;
+  overflow-wrap: anywhere;
 }
 
 .group-title-line .archive-status-badge {
@@ -1944,6 +1968,10 @@ body.app-installed {
 
 .group-settings-btn {
   flex-shrink: 0;
+}
+
+.group-settings-label {
+  display: inline;
 }
 
 .archived-group-banner {
@@ -2271,15 +2299,32 @@ body.app-installed {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto;
     align-items: start;
+    gap: 0.75rem;
+  }
+
+  .group-header-main {
+    gap: 0.8rem;
   }
 
   .group-header-actions {
     width: auto;
     justify-content: flex-end;
+    gap: 0.55rem;
+  }
+
+  .group-title {
+    font-size: 1.8rem;
   }
 
   .group-settings-btn {
-    width: auto;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border-radius: 12px;
+  }
+
+  .group-settings-label {
+    display: none;
   }
 
   .group-details-expense-header {
