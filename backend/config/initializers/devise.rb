@@ -323,6 +323,7 @@ Devise.setup do |config|
     jwt.secret = ENV.fetch('DEVISE_JWT_SECRET_KEY') { Rails.application.secret_key_base }
     jwt.dispatch_requests = [
       ['POST', %r{^/users/sign_in$}],
+      ['POST', %r{^/users$}],           # Registration — new users must also receive a JWT
       ['POST', %r{^/api/v1/auth/login$}]
     ]
     jwt.revocation_requests = [
