@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { AuthContext } from './auth-context';
 import { authApi, isTokenExpired, storeTokenExpiry, AUTH_SESSION_EXPIRED_EVENT } from '../lib/api';
+import { disableDevicePush } from '../lib/devicePush';
 
 // How many ms before the JWT actually expires we proactively log the user out.
 // Prevents the "UI logged in, first API call 401s" window at end of token life.
@@ -176,6 +177,12 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = async () => {
+    try {
+      await disableDevicePush();
+    } catch (error) {
+      console.error('Device notification cleanup error', error);
+    }
+
     try {
       await authApi.logout();
     } catch (error) {

@@ -113,6 +113,18 @@ body.app-installed {
   transform: translateY(-2px);
 }
 
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.56;
+  transform: none;
+  box-shadow: none;
+}
+
+.btn:disabled:hover {
+  transform: none;
+  box-shadow: none;
+}
+
 .btn-danger {
   background: rgba(239, 68, 68, 0.1);
   color: var(--danger-color);
@@ -1570,6 +1582,59 @@ body.app-installed {
   cursor: not-allowed;
 }
 
+.profile-device-push-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem;
+  border-radius: 14px;
+  border: 1px solid rgba(99, 102, 241, 0.24);
+  background:
+    linear-gradient(135deg, rgba(99, 102, 241, 0.12), transparent 56%),
+    rgba(15, 23, 42, 0.34);
+}
+
+.profile-device-push-copy {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.profile-device-push-icon {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+  border-radius: 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #dbeafe;
+  background: rgba(99, 102, 241, 0.18);
+  border: 1px solid rgba(99, 102, 241, 0.28);
+}
+
+.profile-device-push-card h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 0.98rem;
+}
+
+.profile-device-push-card p {
+  margin: 0.25rem 0 0;
+  color: var(--text-secondary);
+  font-size: 0.84rem;
+  line-height: 1.4;
+}
+
+.profile-device-push-card .btn {
+  min-width: 104px;
+  min-height: 42px;
+  padding: 0.65rem 1rem;
+  flex-shrink: 0;
+}
+
 .profile-actions {
   display: flex;
   justify-content: flex-end;
@@ -1821,6 +1886,11 @@ body.app-installed {
 
   .profile-form-grid {
     grid-template-columns: 1fr;
+  }
+
+  .profile-device-push-card {
+    flex-direction: column;
+    align-items: stretch;
   }
 
   .create-group-submit-btn,

@@ -34,6 +34,7 @@ class User < ApplicationRecord
   has_many :settlements_received, class_name: 'Settlement', foreign_key: 'to_user_id'
   has_many :notifications, dependent: :destroy
   has_many :notifications_created, class_name: 'Notification', foreign_key: 'actor_id', dependent: :nullify
+  has_many :push_subscriptions, dependent: :destroy
 
   validates :name, presence: true
   validates :upi_id,

@@ -27,11 +27,22 @@ module Notifications
     end
 
     def call
-      recipients.each do |recipient|
-        Notification.create!(notification_attributes(recipient))
-      end
+      recipients.each { |recipient| notify_recipient(recipient) }
+    end
+
+    def notify_recipient(recipient)
+      notification = Notification.create!(notification_attributes(recipient))
+      send_push(notification)
     rescue StandardError => e
-      Rails.logger.error("[Notifications::Creator] #{e.class}: #{e.message}")
+      Rails.logger.error("[Notifications::Creator] Failed to notify #{recipient.id}: #{e.class}: #{e.message}")
+    end
+
+    def send_push(notification)
+      PushNotifications::Sender.call(notification)
+    rescue Exception => e # rubocop:disable Lint/RescueException
+      # WebPush and underlying OpenSSL/network errors can surface outside
+      # StandardError — rescue everything so a push failure never causes a 500.
+      Rails.logger.error("[Notifications::Creator] Push failed for notification #{notification.id}: #{e.class}: #{e.message}")
     end
 
     private
