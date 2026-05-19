@@ -4,7 +4,10 @@ const APP_SHELL_ASSETS = ['/', '/index.html', '/manifest.webmanifest', '/favicon
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(APP_SHELL_CACHE).then((cache) => cache.addAll(APP_SHELL_ASSETS))
+    caches.open(APP_SHELL_CACHE).then((cache) => cache.addAll(APP_SHELL_ASSETS)).catch(() => {
+      // In dev mode (Vite), static assets don't exist at these paths — that's fine.
+      // The SW still installs and can handle push events.
+    })
   );
   self.skipWaiting();
 });

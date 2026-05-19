@@ -18,7 +18,7 @@ module PushNotifications
       notification.user.push_subscriptions.find_each do |subscription|
         deliver(subscription)
       end
-    rescue StandardError => e
+    rescue Exception => e # rubocop:disable Lint/RescueException
       Rails.logger.error("[PushNotifications::Sender] #{e.class}: #{e.message}")
     end
 
@@ -31,7 +31,7 @@ module PushNotifications
       subscription.update_column(:last_used_at, Time.current)
     rescue WebPush::ExpiredSubscription, WebPush::InvalidSubscription
       subscription.destroy
-    rescue StandardError => e
+    rescue Exception => e # rubocop:disable Lint/RescueException
       Rails.logger.error("[PushNotifications::Sender] #{e.class}: #{e.message}")
     end
 

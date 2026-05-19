@@ -22,7 +22,8 @@ module Api
       end
 
       def destroy
-        current_user.push_subscriptions.where(endpoint: params[:endpoint]).destroy_all if params[:endpoint].present?
+        endpoint = params[:endpoint].presence || params.dig(:push_subscription, :endpoint).presence
+        current_user.push_subscriptions.where(endpoint: endpoint).destroy_all if endpoint.present?
 
         render json: { enabled: false }
       end

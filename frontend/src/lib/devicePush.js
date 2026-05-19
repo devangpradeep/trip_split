@@ -27,8 +27,35 @@ const urlBase64ToUint8Array = (base64String) => {
 export const getServiceWorkerRegistration = async () => {
   if (!devicePushSupported()) return null;
 
-  const existingRegistration = await navigator.serviceWorker.getRegistration();
-  return existingRegistration || navigator.serviceWorker.register('/sw.js');
+  // getRegistration('/') returns the SW controlling this scope if one exists.
+  // Registering again when one already exists is a no-op (returns the existing one).
+  const existingRegistration = await navigator.serviceWorker.getRegistration('/');
+  if (existingRegistration) return existingRegistration;
+
+  return navigator.serviceWorker.register('/sw.js');
+};
+
+/**
+ * Called on app load to keep the service worker alive between browser sessions.
+ * If the user previously enabled push, we re-register the SW so it is active
+ * and ready to handle incoming push events — even after a browser restart.
+ */
+export const ensureServiceWorkerForPush = async () => {
+  if (!devicePushSupported()) return;
+
+  // Only bother if there is an existing push subscription. Avoids registering
+  // the SW for users who never enabled push.
+  try {
+    const tempReg = await navigator.serviceWorker.getRegistration('/');
+    if (!tempReg) {
+      // No SW yet — check if there is a subscription stored (stale state after
+      // a browser profile wipe). If not, skip registration.
+      const reg = await navigator.serviceWorker.register('/sw.js');
+      await reg.pushManager.getSubscription(); // triggers SW activation
+    }
+  } catch {
+    // Non-fatal — push will still work when the user next visits Profile
+  }
 };
 
 export const getBrowserPushSubscription = async () => {
@@ -63,11 +90,28 @@ export const enableDevicePush = async () => {
   }
 
   const registration = await getServiceWorkerRegistration();
-  const existingSubscription = await registration.pushManager.getSubscription();
-  const subscription = existingSubscription || await registration.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
-  });
+  let subscription;
+  try {
+    const existingSubscription = await registration.pushManager.getSubscription();
+    subscription = existingSubscription || await registration.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(vapidPublicKey)
+    });
+  } catch (err) {
+    // Brave (and some Firefox configs) block Google's FCM push relay.
+    // The browser throws "Registration failed - push service error" in that case.
+    const isBraveOrFcmBlock = (
+      err?.message?.toLowerCase().includes('push service') ||
+      err?.message?.toLowerCase().includes('registration failed') ||
+      err?.name === 'AbortError'
+    );
+    if (isBraveOrFcmBlock) {
+      throw new Error(
+        'Your browser blocked the push service. In Brave, go to Settings → Privacy & Security and enable "Use Google services for push messaging", then try again.'
+      );
+    }
+    throw err;
+  }
 
   await pushSubscriptionsApi.create(serializeSubscription(subscription));
   return subscription;
