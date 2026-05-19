@@ -10,6 +10,7 @@ export const AUTH_SESSION_EXPIRED_EVENT = 'auth:session-expired';
 const clearClientAuthState = () => {
   localStorage.removeItem('token');
   localStorage.removeItem('user');
+  localStorage.removeItem('token_exp');
 
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new Event(AUTH_SESSION_EXPIRED_EVENT));
@@ -33,10 +34,12 @@ api.interceptors.request.use((config) => {
 
 api.interceptors.response.use(
   (response) => {
-    // Check if the response includes a new authorization token (Devise JWT)
+    // Persist any token (and its expiry) the server sends back
     const token = response.headers.authorization;
     if (token) {
-      localStorage.setItem('token', token.split(' ')[1] || token);
+      const raw = token.split(' ')[1] || token;
+      localStorage.setItem('token', raw);
+      storeTokenExpiry(raw);
     }
     return response;
   },
@@ -48,12 +51,56 @@ api.interceptors.response.use(
   }
 );
 
+// ---------------------------------------------------------------------------
+// Token utilities
+// ---------------------------------------------------------------------------
+
+/**
+ * Decode the expiry claim from a JWT without verifying its signature.
+ * Returns a Date, or null if the token is malformed.
+ */
+export const decodeTokenExpiry = (token) => {
+  if (!token) return null;
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1]));
+    if (!payload?.exp) return null;
+    return new Date(payload.exp * 1000);
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Returns true if the stored JWT is already expired (or absent).
+ */
+export const isTokenExpired = () => {
+  const token = localStorage.getItem('token');
+  if (!token) return true;
+  const expiry = decodeTokenExpiry(token);
+  if (!expiry) return true;
+  return expiry <= new Date();
+};
+
+/**
+ * Persist the token expiry alongside the token so AuthContext can schedule
+ * a proactive logout without re-decoding the JWT on every render.
+ */
+export const storeTokenExpiry = (token) => {
+  const expiry = decodeTokenExpiry(token);
+  if (expiry) {
+    localStorage.setItem('token_exp', expiry.toISOString());
+  }
+};
+
 export const authApi = {
   login: (data) => axios.post(`${authBaseUrl}/users/sign_in`, { user: data }),
   register: (data) => axios.post(`${authBaseUrl}/users`, { user: data }),
   logout: () => axios.delete(`${authBaseUrl}/users/sign_out`, {
     headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
-  })
+  }),
+  // Validates the stored JWT server-side and returns fresh user data.
+  // Throws on 401 — the caller uses this to detect a dead/expired session.
+  me: () => api.get('/auth/me'),
 };
 
 export const profileApi = {
