@@ -1471,13 +1471,13 @@ const GroupDetails = () => {
     <div className="container flex-col gap-6" style={{ paddingBottom: '5rem' }}>
       {/* Header */}
       <div className="group-header-row">
-        <div className="flex items-center gap-4">
-          <Link to="/" className="btn btn-secondary" style={{ padding: '0.5rem', borderRadius: '50%' }}>
+        <div className="group-header-main">
+          <Link to="/" className="btn btn-secondary group-back-btn" aria-label="Back to groups">
             <ArrowLeft size={20} />
           </Link>
-          <div>
+          <div className="group-header-copy">
             <div className="group-title-line">
-              <h1 className="text-title" style={{ fontSize: '2rem' }}>{group.name}</h1>
+              <h1 className="text-title group-title">{group.name}</h1>
               {isArchived && <span className="archive-status-badge"><Archive size={13} /> Archived</span>}
             </div>
             <div className="group-header-meta">
@@ -1490,8 +1490,9 @@ const GroupDetails = () => {
         <div className="group-header-actions">
           <NotificationBell />
           {canManageGroupSettings && (
-            <button type="button" className="btn btn-secondary group-settings-btn" onClick={openGroupSettings}>
-              <Settings size={18} /> Settings
+            <button type="button" className="btn btn-secondary group-settings-btn" onClick={openGroupSettings} aria-label="Group settings" title="Group settings">
+              <Settings size={18} />
+              <span className="group-settings-label">Settings</span>
             </button>
           )}
         </div>
