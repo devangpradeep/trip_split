@@ -2,10 +2,30 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import api, { groupInvitesApi, groupMembersApi, groupsApi } from '../lib/api';
 import { useAuth } from '../contexts/useAuth';
-import { ArrowLeft, Plus, Receipt, UserPlus, Pencil, Trash2, CalendarDays, Settings, Archive, RotateCcw } from 'lucide-react';
+import {
+  ArrowLeft,
+  Plus,
+  Receipt,
+  UserPlus,
+  Pencil,
+  Trash2,
+  CalendarDays,
+  ChevronLeft,
+  ChevronRight,
+  Settings,
+  Archive,
+  RotateCcw
+} from 'lucide-react';
 import NotificationBell from '../components/NotificationBell';
 
-const todayISO = () => new Date().toISOString().split('T')[0];
+const todayISO = () => {
+  const date = new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+
+  return `${year}-${month}-${day}`;
+};
 const FRIEND_SUGGESTION_DEBOUNCE_MS = 220;
 const GROUP_DATA_POLL_INTERVAL_MS = 10000;
 
@@ -51,6 +71,56 @@ const parseUIDateToISO = (displayDate) => {
   const isoDate = `${year}-${month}-${day}`;
 
   return isValidISODate(isoDate) ? isoDate : null;
+};
+
+const monthLabelFormatter = new Intl.DateTimeFormat('en-US', { month: 'long', year: 'numeric' });
+const weekdayLabels = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+
+const isoDateToLocalDate = (isoDate) => {
+  if (!isValidISODate(isoDate)) return new Date();
+
+  const [year, month, day] = isoDate.split('-').map(Number);
+  return new Date(year, month - 1, day);
+};
+
+const localDateToISO = (date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+
+  return `${year}-${month}-${day}`;
+};
+
+const formatExpenseDateLabel = (isoDate) => {
+  if (!isValidISODate(isoDate)) return '';
+
+  const expenseDate = isoDateToLocalDate(isoDate);
+  const today = isoDateToLocalDate(todayISO());
+  const dayDiff = Math.round((today - expenseDate) / 86400000);
+
+  if (dayDiff === 0) return 'Today';
+  if (dayDiff === 1) return 'Yesterday';
+  if (dayDiff > 1 && dayDiff < 7) {
+    return expenseDate.toLocaleDateString('en-US', { weekday: 'long' });
+  }
+
+  return expenseDate.toLocaleDateString('en-GB', {
+    day: 'numeric',
+    month: 'short',
+    year: expenseDate.getFullYear() === today.getFullYear() ? undefined : 'numeric'
+  });
+};
+
+const buildCalendarDays = (viewDate) => {
+  const firstOfMonth = new Date(viewDate.getFullYear(), viewDate.getMonth(), 1);
+  const calendarStart = new Date(firstOfMonth);
+  calendarStart.setDate(firstOfMonth.getDate() - firstOfMonth.getDay());
+
+  return Array.from({ length: 42 }, (_item, index) => {
+    const date = new Date(calendarStart);
+    date.setDate(calendarStart.getDate() + index);
+    return date;
+  });
 };
 
 const formatDateTimeForUI = (value) => {
@@ -141,17 +211,50 @@ const CustomSelect = ({ value, options, onChange, disabled = false }) => {
 
 const CustomDateInput = ({ value, onChange, required = false, disabled = false }) => {
   const [displayValue, setDisplayValue] = useState(formatISODateForUI(value));
-  const proxyDateInputRef = useRef(null);
+  const [open, setOpen] = useState(false);
+  const [viewDate, setViewDate] = useState(isoDateToLocalDate(value));
+  const rootRef = useRef(null);
+  const selectedISODate = isValidISODate(value) ? value : '';
+  const viewMonth = viewDate.getMonth();
 
   useEffect(() => {
     setDisplayValue(formatISODateForUI(value));
+    setViewDate(isoDateToLocalDate(value));
   }, [value]);
+
+  useEffect(() => {
+    const handleDocumentClick = (event) => {
+      if (!rootRef.current?.contains(event.target)) {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleDocumentClick);
+    document.addEventListener('touchstart', handleDocumentClick);
+
+    return () => {
+      document.removeEventListener('mousedown', handleDocumentClick);
+      document.removeEventListener('touchstart', handleDocumentClick);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handleEscape = (event) => {
+      if (event.key === 'Escape') {
+        setOpen(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleEscape);
+    return () => document.removeEventListener('keydown', handleEscape);
+  }, []);
 
   const commitValue = () => {
     const parsedDate = parseUIDateToISO(displayValue);
     if (parsedDate) {
       onChange(parsedDate);
       setDisplayValue(formatISODateForUI(parsedDate));
+      setViewDate(isoDateToLocalDate(parsedDate));
       return;
     }
 
@@ -160,18 +263,23 @@ const CustomDateInput = ({ value, onChange, required = false, disabled = false }
 
   const openDatePicker = () => {
     if (disabled) return;
+    setOpen((prev) => !prev);
+  };
 
-    if (typeof proxyDateInputRef.current?.showPicker === 'function') {
-      proxyDateInputRef.current.showPicker();
-      return;
-    }
+  const changeMonth = (offset) => {
+    setViewDate((prev) => new Date(prev.getFullYear(), prev.getMonth() + offset, 1));
+  };
 
-    proxyDateInputRef.current?.focus();
-    proxyDateInputRef.current?.click();
+  const selectDate = (date) => {
+    const nextDate = localDateToISO(date);
+    onChange(nextDate);
+    setDisplayValue(formatISODateForUI(nextDate));
+    setViewDate(date);
+    setOpen(false);
   };
 
   return (
-    <div className="custom-date-input">
+    <div ref={rootRef} className="custom-date-input">
       <input
         type="text"
         className="custom-date-text-input"
@@ -182,7 +290,9 @@ const CustomDateInput = ({ value, onChange, required = false, disabled = false }
         onBlur={commitValue}
         onKeyDown={(e) => {
           if (e.key === 'Enter') {
+            e.preventDefault();
             commitValue();
+            setOpen(false);
           }
         }}
         required={required}
@@ -199,20 +309,49 @@ const CustomDateInput = ({ value, onChange, required = false, disabled = false }
       >
         <CalendarDays size={16} />
       </button>
-      <input
-        ref={proxyDateInputRef}
-        type="date"
-        className="custom-date-native-proxy"
-        value={value || ''}
-        onChange={(e) => {
-          const nextValue = e.target.value;
-          if (!nextValue) return;
-          onChange(nextValue);
-          setDisplayValue(formatISODateForUI(nextValue));
-        }}
-        tabIndex={-1}
-        aria-hidden="true"
-      />
+      {open && (
+        <div className="custom-date-calendar" role="dialog" aria-label="Choose date">
+          <div className="custom-date-calendar-header">
+            <button type="button" className="custom-date-nav-btn" onClick={() => changeMonth(-1)} aria-label="Previous month">
+              <ChevronLeft size={17} />
+            </button>
+            <div className="custom-date-month-label">{monthLabelFormatter.format(viewDate)}</div>
+            <button type="button" className="custom-date-nav-btn" onClick={() => changeMonth(1)} aria-label="Next month">
+              <ChevronRight size={17} />
+            </button>
+          </div>
+          <div className="custom-date-weekdays" aria-hidden="true">
+            {weekdayLabels.map((label, index) => (
+              <span key={`${label}-${index}`}>{label}</span>
+            ))}
+          </div>
+          <div className="custom-date-grid">
+            {buildCalendarDays(viewDate).map((date) => {
+              const isoDate = localDateToISO(date);
+              const isSelected = isoDate === selectedISODate;
+              const isToday = isoDate === todayISO();
+              const isOutsideMonth = date.getMonth() !== viewMonth;
+
+              return (
+                <button
+                  key={isoDate}
+                  type="button"
+                  className={`custom-date-day ${isSelected ? 'selected' : ''} ${isToday ? 'today' : ''} ${isOutsideMonth ? 'muted' : ''}`}
+                  onClick={() => selectDate(date)}
+                  aria-pressed={isSelected}
+                >
+                  {date.getDate()}
+                </button>
+              );
+            })}
+          </div>
+          <div className="custom-date-calendar-footer">
+            <button type="button" className="custom-date-footer-btn" onClick={() => selectDate(new Date())}>
+              Today
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -1526,11 +1665,15 @@ const GroupDetails = () => {
                       <div className="expense-subtitle">
                         {expense.paid_by.id === user.id ? 'You' : expense.paid_by.name} paid {currencySym}{parseFloat(expense.amount).toFixed(2)}
                       </div>
-                      {expense.created_by && (
-                        <div className="expense-subtitle">
-                          Added by {expense.created_by.id === user.id ? 'You' : expense.created_by.name}
-                        </div>
-                      )}
+                      <div className="expense-subtitle expense-date-meta">
+                        {formatExpenseDateLabel(expense.date)}
+                        {expense.created_by && (
+                          <>
+                            <span aria-hidden="true">•</span>
+                            Added by {expense.created_by.id === user.id ? 'You' : expense.created_by.name}
+                          </>
+                        )}
+                      </div>
                     </div>
                   </div>
                   <div className="text-right expense-side">
@@ -1787,7 +1930,9 @@ const GroupDetails = () => {
               </div>
 
               <div className="form-group" style={{ marginBottom: 0 }}>
-                <label>Description</label>
+                <label>
+                  Description <span className="field-optional">Optional</span>
+                </label>
                 <textarea
                   rows={3}
                   value={groupSettingsForm.description}

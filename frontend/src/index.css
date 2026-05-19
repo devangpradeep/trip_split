@@ -414,12 +414,132 @@ body.app-installed {
   border-color: rgba(120, 134, 255, 0.55);
 }
 
-.custom-date-native-proxy {
+.custom-date-calendar {
   position: absolute;
-  width: 1px;
-  height: 1px;
-  opacity: 0;
-  pointer-events: none;
+  top: calc(100% + 0.5rem);
+  left: 0;
+  z-index: 45;
+  width: min(318px, calc(100vw - 2rem));
+  padding: 0.85rem;
+  border-radius: 14px;
+  border: 1px solid rgba(120, 134, 255, 0.34);
+  background:
+    linear-gradient(160deg, rgba(99, 102, 241, 0.14), transparent 50%),
+    rgba(10, 18, 38, 0.98);
+  box-shadow:
+    0 18px 48px rgba(2, 8, 24, 0.52),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.custom-date-calendar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.7rem;
+}
+
+.custom-date-month-label {
+  color: var(--text-primary);
+  font-weight: 700;
+  font-size: 0.94rem;
+}
+
+.custom-date-nav-btn,
+.custom-date-footer-btn {
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: rgba(255, 255, 255, 0.04);
+  color: #dbeafe;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.16s ease, background-color 0.16s ease, color 0.16s ease;
+}
+
+.custom-date-nav-btn {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.custom-date-nav-btn:hover,
+.custom-date-footer-btn:hover {
+  border-color: rgba(120, 134, 255, 0.55);
+  background: rgba(99, 102, 241, 0.18);
+  color: #ffffff;
+}
+
+.custom-date-weekdays,
+.custom-date-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.custom-date-weekdays {
+  margin-bottom: 0.35rem;
+}
+
+.custom-date-weekdays span {
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.custom-date-grid {
+  gap: 0.15rem;
+}
+
+.custom-date-day {
+  width: 100%;
+  aspect-ratio: 1;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.86rem;
+  cursor: pointer;
+  transition: border-color 0.16s ease, background-color 0.16s ease, color 0.16s ease;
+}
+
+.custom-date-day:hover {
+  border-color: rgba(120, 134, 255, 0.38);
+  background: rgba(99, 102, 241, 0.16);
+}
+
+.custom-date-day.muted {
+  color: rgba(148, 163, 184, 0.66);
+}
+
+.custom-date-day.today {
+  border-color: rgba(34, 211, 238, 0.52);
+}
+
+.custom-date-day.selected {
+  color: #ffffff;
+  border-color: rgba(120, 134, 255, 0.9);
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.95), rgba(79, 70, 229, 0.96));
+  box-shadow: 0 8px 18px rgba(79, 70, 229, 0.26);
+}
+
+.custom-date-calendar-footer {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.7rem;
+}
+
+.custom-date-footer-btn {
+  min-height: 34px;
+  border-radius: 10px;
+  padding: 0.35rem 0.75rem;
+  font-weight: 700;
+  font-size: 0.82rem;
 }
 
 /* Animations */
@@ -521,12 +641,6 @@ body.app-installed {
   text-align: right;
   font-size: 0.8rem;
   color: var(--text-secondary);
-}
-
-input[type="date"]::-webkit-calendar-picker-indicator {
-  filter: invert(0.95) sepia(0.2) saturate(0.2);
-  opacity: 0.8;
-  cursor: pointer;
 }
 
 /* Expense actions */
@@ -640,6 +754,12 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.expense-date-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
 }
 
 .expense-side {
@@ -1544,6 +1664,16 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 .create-group-name-field,
 .create-group-currency-field {
   min-width: 0;
+}
+
+.create-group-description-field {
+  grid-column: 1 / -1;
+}
+
+.create-group-description-field textarea {
+  width: 100%;
+  resize: vertical;
+  min-height: 74px;
 }
 
 .create-group-friends-field {

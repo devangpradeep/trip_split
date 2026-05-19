@@ -82,6 +82,7 @@ const Dashboard = () => {
   const [loading, setLoading] = useState(true);
   const [showAddGroup, setShowAddGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
+  const [newGroupDescription, setNewGroupDescription] = useState('');
   const [newGroupCurrency, setNewGroupCurrency] = useState('INR');
   const [newGroupFriendQuery, setNewGroupFriendQuery] = useState('');
   const [selectedNewGroupFriends, setSelectedNewGroupFriends] = useState([]);
@@ -162,7 +163,11 @@ const Dashboard = () => {
       setCreatingGroup(true);
       setCreateGroupError('');
       const response = await api.post('/groups', {
-        group: { name: newGroupName, currency: newGroupCurrency }
+        group: {
+          name: newGroupName,
+          description: newGroupDescription.trim(),
+          currency: newGroupCurrency
+        }
       });
       const createdGroup = normalizeGroup(response.data);
       if (!createdGroup?.id) {
@@ -188,6 +193,7 @@ const Dashboard = () => {
 
       await fetchGroups();
       setNewGroupName('');
+      setNewGroupDescription('');
       setNewGroupFriendQuery('');
       setSelectedNewGroupFriends([]);
       setShowAddGroup(false);
@@ -311,6 +317,17 @@ const Dashboard = () => {
                 onChange={setNewGroupCurrency}
               />
             </div>
+            <div className="form-group create-group-description-field" style={{ margin: 0 }}>
+              <label>
+                Description <span className="field-optional">Optional</span>
+              </label>
+              <textarea
+                rows={2}
+                placeholder="e.g., Weekend trip plans"
+                value={newGroupDescription}
+                onChange={(e) => setNewGroupDescription(e.target.value)}
+              />
+            </div>
             <div className="form-group create-group-friends-field" style={{ margin: 0 }}>
               <label style={{ marginBottom: '0.35rem' }}>Add friends (optional)</label>
               <input
@@ -355,6 +372,7 @@ const Dashboard = () => {
                   if (creatingGroup) return;
                   setShowAddGroup(false);
                   setCreateGroupError('');
+                  setNewGroupDescription('');
                   setNewGroupFriendQuery('');
                   setSelectedNewGroupFriends([]);
                 }}
