@@ -67,6 +67,11 @@ export const notificationsApi = {
   markAllRead: () => api.patch('/notifications/mark_all_read')
 };
 
+export const pushSubscriptionsApi = {
+  create: (subscription) => api.post('/push_subscription', { push_subscription: subscription }),
+  remove: (endpoint) => api.delete('/push_subscription', { data: { endpoint } })
+};
+
 export const groupMembersApi = {
   add: (groupId, email) => api.post(`/groups/${groupId}/members`, {
     member: { email }

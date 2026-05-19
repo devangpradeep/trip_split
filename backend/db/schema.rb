@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_05_12_100000) do
+ActiveRecord::Schema[8.1].define(version: 2026_05_14_100000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "pgcrypto"
@@ -107,6 +107,19 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_12_100000) do
     t.index ["user_id"], name: "index_notifications_on_user_id"
   end
 
+  create_table "push_subscriptions", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
+    t.text "auth_key", null: false
+    t.datetime "created_at", null: false
+    t.text "endpoint", null: false
+    t.datetime "last_used_at"
+    t.text "p256dh_key", null: false
+    t.datetime "updated_at", null: false
+    t.text "user_agent"
+    t.uuid "user_id", null: false
+    t.index ["endpoint"], name: "index_push_subscriptions_on_endpoint", unique: true
+    t.index ["user_id"], name: "index_push_subscriptions_on_user_id"
+  end
+
   create_table "settlements", id: :uuid, default: -> { "gen_random_uuid()" }, force: :cascade do |t|
     t.decimal "amount"
     t.datetime "created_at", null: false
@@ -160,6 +173,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_05_12_100000) do
   add_foreign_key "notifications", "groups", on_delete: :nullify
   add_foreign_key "notifications", "users"
   add_foreign_key "notifications", "users", column: "actor_id", on_delete: :nullify
+  add_foreign_key "push_subscriptions", "users"
   add_foreign_key "settlements", "groups"
   add_foreign_key "settlements", "users", column: "from_user_id"
   add_foreign_key "settlements", "users", column: "to_user_id"

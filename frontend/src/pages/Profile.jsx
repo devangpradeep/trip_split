@@ -1,9 +1,27 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, Bell, Check, CheckCircle2, Copy, CreditCard, Save, UserCircle, XCircle } from 'lucide-react';
+import {
+  ArrowLeft,
+  Bell,
+  Check,
+  CheckCircle2,
+  Copy,
+  CreditCard,
+  Save,
+  Smartphone,
+  UserCircle,
+  XCircle
+} from 'lucide-react';
 import { profileApi } from '../lib/api';
 import { useAuth } from '../contexts/useAuth';
 import NotificationBell from '../components/NotificationBell';
+import {
+  devicePushConfigured,
+  devicePushSupported,
+  disableDevicePush,
+  enableDevicePush,
+  getBrowserPushSubscription
+} from '../lib/devicePush';
 
 const NOTIFICATION_PREFERENCE_GROUPS = [
   {
@@ -104,6 +122,8 @@ const Profile = () => {
   const [success, setSuccess] = useState('');
   const [copiedField, setCopiedField] = useState('');
   const [activeProfileSection, setActiveProfileSection] = useState('basic');
+  const [devicePushStatus, setDevicePushStatus] = useState('checking');
+  const [updatingDevicePush, setUpdatingDevicePush] = useState(false);
 
   useEffect(() => {
     if (!success) return undefined;
@@ -138,6 +158,30 @@ const Profile = () => {
     };
 
     fetchProfile();
+  }, []);
+
+  useEffect(() => {
+    const loadDevicePushStatus = async () => {
+      if (!devicePushSupported()) {
+        setDevicePushStatus('unsupported');
+        return;
+      }
+
+      if (!devicePushConfigured()) {
+        setDevicePushStatus('not_configured');
+        return;
+      }
+
+      if (window.Notification.permission === 'denied') {
+        setDevicePushStatus('blocked');
+        return;
+      }
+
+      const subscription = await getBrowserPushSubscription();
+      setDevicePushStatus(subscription ? 'enabled' : 'disabled');
+    };
+
+    loadDevicePushStatus();
   }, []);
 
   const buildForm = (nextProfile) => ({
@@ -225,6 +269,86 @@ const Profile = () => {
     } catch {
       setError('Unable to copy automatically');
     }
+  };
+
+  const handleEnableDevicePush = async () => {
+    try {
+      setUpdatingDevicePush(true);
+      setError('');
+      setSuccess('');
+      await enableDevicePush();
+      setDevicePushStatus('enabled');
+      setSuccess('Device notifications enabled');
+    } catch (pushError) {
+      if (typeof window !== 'undefined' && window.Notification?.permission === 'denied') {
+        setDevicePushStatus('blocked');
+        setError('Browser notifications are blocked for this site. Allow them in browser settings, then try again.');
+        return;
+      }
+
+      setDevicePushStatus('disabled');
+      setError(pushError.message || 'Choose Allow in the browser permission prompt to enable device notifications.');
+    } finally {
+      setUpdatingDevicePush(false);
+    }
+  };
+
+  const handleDisableDevicePush = async () => {
+    try {
+      setUpdatingDevicePush(true);
+      setError('');
+      setSuccess('');
+      await disableDevicePush();
+      setDevicePushStatus('disabled');
+      setSuccess('Device notifications disabled');
+    } catch (pushError) {
+      setError(pushError.message || 'Failed to disable device notifications');
+    } finally {
+      setUpdatingDevicePush(false);
+    }
+  };
+
+  const devicePushCopy = {
+    checking: 'Checking this browser...',
+    enabled: 'This browser can receive notifications even when Tripsplit is not open.',
+    disabled: 'Turn this on to receive notifications on this device.',
+    blocked: 'Click Enable to turn on device notifications.',
+    unsupported: 'This browser does not support device notifications.',
+    not_configured: 'Device notifications are not configured for this environment.'
+  };
+
+  const devicePushAction = () => {
+    if (devicePushStatus === 'enabled') {
+      return (
+        <button
+          type="button"
+          className="btn btn-secondary"
+          onClick={handleDisableDevicePush}
+          disabled={updatingDevicePush}
+        >
+          {updatingDevicePush ? 'Disabling...' : 'Disable'}
+        </button>
+      );
+    }
+
+    if (['checking', 'unsupported', 'not_configured'].includes(devicePushStatus)) {
+      return (
+        <button type="button" className="btn btn-secondary" disabled>
+          {devicePushStatus === 'checking' ? 'Checking...' : 'Unavailable'}
+        </button>
+      );
+    }
+
+    return (
+      <button
+        type="button"
+        className="btn btn-primary"
+        onClick={handleEnableDevicePush}
+        disabled={updatingDevicePush}
+      >
+        {updatingDevicePush ? 'Enabling...' : 'Enable'}
+      </button>
+    );
   };
 
   if (loading) return <div className="container text-center pt-20">Loading profile...</div>;
@@ -454,6 +578,19 @@ const Profile = () => {
                   </div>
                 </div>
               ))}
+            </div>
+
+            <div className="profile-device-push-card">
+              <div className="profile-device-push-copy">
+                <div className="profile-device-push-icon">
+                  <Smartphone size={18} />
+                </div>
+                <div>
+                  <h3>Device notifications</h3>
+                  <p>{devicePushCopy[devicePushStatus]}</p>
+                </div>
+              </div>
+              {devicePushAction()}
             </div>
           </section>
 

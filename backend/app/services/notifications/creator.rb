@@ -28,7 +28,8 @@ module Notifications
 
     def call
       recipients.each do |recipient|
-        Notification.create!(notification_attributes(recipient))
+        notification = Notification.create!(notification_attributes(recipient))
+        PushNotifications::Sender.call(notification)
       end
     rescue StandardError => e
       Rails.logger.error("[Notifications::Creator] #{e.class}: #{e.message}")

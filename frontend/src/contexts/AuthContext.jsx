@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AuthContext } from './auth-context';
 import { authApi, AUTH_SESSION_EXPIRED_EVENT } from '../lib/api';
+import { disableDevicePush } from '../lib/devicePush';
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
@@ -81,6 +82,12 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = async () => {
+    try {
+      await disableDevicePush();
+    } catch (error) {
+      console.error('Device notification cleanup error', error);
+    }
+
     try {
       await authApi.logout();
     } catch (error) {

@@ -13,6 +13,7 @@ Rails.application.routes.draw do
       get 'invites/:token', to: 'group_invites#show'
       post 'invites/:token/accept', to: 'group_invites#accept'
       resource :profile, only: %i[show update]
+      resource :push_subscription, only: %i[create destroy]
       resources :notifications, only: %i[index] do
         member do
           patch :read
