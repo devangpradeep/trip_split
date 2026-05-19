@@ -132,13 +132,22 @@ const formatDateTimeForUI = (value) => {
   return date.toLocaleString();
 };
 
+const orderMembersWithUserLast = (members = [], currentUserId = '') => [
+  ...members.filter((member) => member.id !== currentUserId),
+  ...members.filter((member) => member.id === currentUserId)
+];
+
+const findRemainderSplit = (includedSplits, editedUserId) => (
+  [...includedSplits].reverse().find((split) => split.user_id !== editedUserId)
+);
+
 const buildDefaultExpenseForm = (members = [], paidById = '') => ({
   description: '',
   amount: '',
   date: todayISO(),
   paid_by_id: paidById,
   split_type: 'equal',
-  splits: members.map((member) => ({
+  splits: orderMembersWithUserLast(members, paidById).map((member) => ({
     user_id: member.id,
     name: member.name,
     included: true,
@@ -515,7 +524,7 @@ const GroupDetails = () => {
 
     setExpenseForm((prev) => {
       const prevSplitsByUserId = new Map(prev.splits.map((split) => [split.user_id, split]));
-      const nextSplits = group.members.map((member) => {
+      const nextSplits = orderMembersWithUserLast(group.members, user.id).map((member) => {
         const existing = prevSplitsByUserId.get(member.id);
         return existing
           ? { ...existing, name: member.name }
@@ -524,7 +533,7 @@ const GroupDetails = () => {
 
       return { ...prev, splits: nextSplits };
     });
-  }, [group, showAddExpense]);
+  }, [group, showAddExpense, user.id]);
 
   const handleAddExpense = async (e) => {
     e.preventDefault();
@@ -623,13 +632,7 @@ const GroupDetails = () => {
       const includedSplits = prev.splits.filter((split) => split.included);
       if (includedSplits.length < 2) return prev;
 
-      const preferredAutoSplit = includedSplits.find(
-        (split) => split.user_id === user.id && split.user_id !== editedUserId
-      );
-      const fallbackAutoSplit = includedSplits.find(
-        (split) => split.user_id !== editedUserId
-      );
-      const autoSplit = preferredAutoSplit || fallbackAutoSplit;
+      const autoSplit = findRemainderSplit(includedSplits, editedUserId);
       if (!autoSplit) return prev;
 
       const targetTotal =
@@ -1070,7 +1073,7 @@ const GroupDetails = () => {
       expense.expense_splits.map((split) => [split.user.id, split])
     );
 
-    const formSplits = group.members.map((member) => {
+    const formSplits = orderMembersWithUserLast(group.members, user.id).map((member) => {
       const existingSplit = splitsByUserId.get(member.id);
       const splitAmount = existingSplit ? parseFloat(existingSplit.amount || 0) : 0;
       const splitPercentage = totalAmount > 0 ? (splitAmount / totalAmount) * 100 : 0;
@@ -1122,13 +1125,7 @@ const GroupDetails = () => {
       const includedSplits = prev.splits.filter((split) => split.included);
       if (includedSplits.length < 2) return prev;
 
-      const preferredAutoSplit = includedSplits.find(
-        (split) => split.user_id === user.id && split.user_id !== editedUserId
-      );
-      const fallbackAutoSplit = includedSplits.find(
-        (split) => split.user_id !== editedUserId
-      );
-      const autoSplit = preferredAutoSplit || fallbackAutoSplit;
+      const autoSplit = findRemainderSplit(includedSplits, editedUserId);
       if (!autoSplit) return prev;
 
       const targetTotal =
