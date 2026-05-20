@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/useAuth';
 import api, { groupMembersApi } from '../lib/api';
-import { LogOut, Plus, Users, ArrowRight, UserCircle, Archive, ChevronDown, ChevronRight, TrendingUp, TrendingDown } from 'lucide-react';
+import { LogOut, Plus, Users, ArrowRight, UserCircle, Archive, ChevronDown, ChevronRight, TrendingUp, TrendingDown, Search, X } from 'lucide-react';
 import NotificationBell from '../components/NotificationBell';
 
 const normalizeGroup = (payload) => payload?.group || payload?.data || payload || null;
@@ -115,6 +115,7 @@ const Dashboard = () => {
   const [selectedNewGroupFriends, setSelectedNewGroupFriends] = useState([]);
   const [creatingGroup, setCreatingGroup] = useState(false);
   const [createGroupError, setCreateGroupError] = useState('');
+  const [groupSearchQuery, setGroupSearchQuery] = useState('');
   const [archivedGroupsCollapsed, setArchivedGroupsCollapsed] = useState(() => (
     localStorage.getItem(ARCHIVED_GROUPS_COLLAPSED_KEY) === 'true'
   ));
@@ -167,8 +168,15 @@ const Dashboard = () => {
   const selectedFriendEmailSet = new Set(
     selectedNewGroupFriends.map((friend) => friend.email)
   );
-  const activeGroups = groups.filter((group) => group.status !== 'archived' && !group.archived_at);
-  const archivedGroups = groups.filter((group) => group.status === 'archived' || group.archived_at);
+  const searchQuery = groupSearchQuery.trim().toLowerCase();
+  const activeGroups = groups
+    .filter((group) => group.status !== 'archived' && !group.archived_at)
+    .filter((group) => !searchQuery || group.name.toLowerCase().includes(searchQuery));
+  const archivedGroups = groups
+    .filter((group) => group.status === 'archived' || group.archived_at)
+    .filter((group) => !searchQuery || group.name.toLowerCase().includes(searchQuery));
+  const isSearching = searchQuery.length > 0;
+  const totalMatchCount = activeGroups.length + archivedGroups.length;
 
   const filteredFriendSuggestions = uniqueFriendCandidates.filter((friend) => {
     if (selectedFriendEmailSet.has(friend.email)) return false;
@@ -354,7 +362,7 @@ const Dashboard = () => {
       </header>
 
       {/* Main Content */}
-      <div className="dashboard-toolbar" style={{ marginBottom: '1.5rem' }}>
+      <div className="dashboard-toolbar" style={{ marginBottom: '1rem' }}>
         <h2 className="text-2xl font-bold">Your Groups</h2>
         <button 
           className="btn btn-primary"
@@ -363,6 +371,33 @@ const Dashboard = () => {
           <Plus size={18} /> New Group
         </button>
       </div>
+
+      {groups.length > 0 && (
+        <div className="group-search-bar" style={{ marginBottom: '1.5rem' }}>
+          <Search size={16} className="group-search-icon" />
+          <input
+            id="group-search-input"
+            type="search"
+            className="group-search-input"
+            placeholder="Search groups by name…"
+            value={groupSearchQuery}
+            onChange={(e) => setGroupSearchQuery(e.target.value)}
+            autoComplete="off"
+            autoCorrect="off"
+            spellCheck={false}
+          />
+          {groupSearchQuery && (
+            <button
+              type="button"
+              className="group-search-clear"
+              onClick={() => setGroupSearchQuery('')}
+              aria-label="Clear search"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      )}
 
       {showAddGroup && (
         <div className="glass-panel animate-fade-in" style={{ marginBottom: '2rem' }}>
@@ -515,18 +550,29 @@ const Dashboard = () => {
             <Plus size={18} /> Create your first group
           </button>
         </div>
+      ) : isSearching && totalMatchCount === 0 ? (
+        <div className="glass-panel text-center animate-fade-in" style={{ padding: '3rem 2rem' }}>
+          <Search size={36} style={{ color: 'var(--text-secondary)', margin: '0 auto 1rem' }} />
+          <h3 className="text-2xl font-bold" style={{ marginBottom: '0.5rem' }}>No groups found</h3>
+          <p className="text-secondary" style={{ marginBottom: '1.25rem' }}>
+            No groups match <strong>"{groupSearchQuery}"</strong>
+          </p>
+          <button className="btn btn-secondary" onClick={() => setGroupSearchQuery('')}>
+            Clear search
+          </button>
+        </div>
       ) : (
         <div className="dashboard-groups-stack">
           {activeGroups.length > 0 ? (
             <div className="group-card-grid">
               {activeGroups.map((group) => renderGroupCard(group))}
             </div>
-          ) : (
+          ) : !isSearching ? (
             <div className="glass-panel text-center" style={{ padding: '2.5rem 2rem' }}>
               <h3 className="text-2xl font-bold" style={{ marginBottom: '0.5rem' }}>No active groups</h3>
               <p className="text-secondary">Create a group or restore one from the archived section.</p>
             </div>
-          )}
+          ) : null}
 
           {archivedGroups.length > 0 && (
             <section className="archived-groups-section">

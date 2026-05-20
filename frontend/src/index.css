@@ -1223,6 +1223,71 @@ body.app-installed {
   gap: 2rem;
 }
 
+/* Group search bar */
+.group-search-bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--surface-border);
+  border-radius: 12px;
+  padding: 0 0.85rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.group-search-bar:focus-within {
+  border-color: rgba(112, 127, 255, 0.5);
+  box-shadow: 0 0 0 3px rgba(112, 127, 255, 0.12);
+}
+
+.group-search-icon {
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  pointer-events: none;
+}
+
+.group-search-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  box-shadow: none;
+  padding: 0.75rem 0.6rem;
+  font-family: inherit;
+  font-size: 0.95rem;
+  color: var(--text-primary);
+  min-width: 0;
+}
+
+.group-search-input::placeholder {
+  color: var(--text-secondary);
+}
+
+/* Hide browser-default clear button on search inputs */
+.group-search-input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.group-search-clear {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  padding: 0.25rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: color 0.15s, background 0.15s;
+}
+
+.group-search-clear:hover {
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.08);
+}
+
 .group-card-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
