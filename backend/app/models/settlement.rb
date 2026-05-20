@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 class Settlement < ApplicationRecord
-  belongs_to :group
+  belongs_to :group, touch: true
   belongs_to :from_user, class_name: 'User'
   belongs_to :to_user, class_name: 'User'
 

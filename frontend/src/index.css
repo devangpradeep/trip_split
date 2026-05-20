@@ -1248,6 +1248,38 @@ body.app-installed {
   border-top: 1px solid var(--surface-border);
 }
 
+/* Balance summary chip on group cards */
+.group-card-balance-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.28rem 0.65rem;
+  border-radius: 8px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  margin-bottom: 0.85rem;
+  width: fit-content;
+}
+
+.chip-owed {
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.28);
+  color: #34d399;
+}
+
+.chip-owes {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.26);
+  color: #f87171;
+}
+
+.chip-settled {
+  background: rgba(148, 163, 184, 0.08);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  color: var(--text-secondary);
+}
+
 /* Profile */
 .profile-page {
   padding-bottom: 5rem;
@@ -1770,13 +1802,53 @@ body.app-installed {
   font-size: 0.9rem;
   color: #dbeafe;
   background: transparent;
-  padding: 0.48rem 0.58rem;
+  padding: 0.48rem 0.65rem;
   cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
 }
 
 .create-group-friend-suggestion-btn:hover {
   background: rgba(99, 102, 241, 0.24);
   color: #ffffff;
+}
+
+/* Name line in suggestion */
+.friend-suggestion-name {
+  font-weight: 600;
+  font-size: 0.88rem;
+  color: inherit;
+}
+
+/* Email sub-line in suggestion */
+.friend-suggestion-email {
+  font-size: 0.77rem;
+  color: rgba(148, 163, 184, 0.9);
+  font-family: 'Courier New', monospace;
+}
+
+.create-group-friend-suggestion-btn:hover .friend-suggestion-email {
+  color: rgba(255, 255, 255, 0.65);
+}
+
+/* "Add by email" direct-entry row */
+.friend-suggestion-email-direct {
+  border-top: 1px solid rgba(99, 102, 241, 0.22);
+  margin-top: 0.25rem;
+  padding-top: 0.55rem;
+}
+
+.friend-suggestion-direct-label {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #818cf8;
+}
+
+.friend-suggestion-email-direct:hover .friend-suggestion-direct-label {
+  color: #a5b4fc;
 }
 
 .create-group-actions {
@@ -1804,15 +1876,43 @@ body.app-installed {
   border: 1px solid rgba(99, 102, 241, 0.5);
   background: rgba(99, 102, 241, 0.18);
   color: #e8eeff;
-  border-radius: 999px;
-  padding: 0.3rem 0.65rem;
+  border-radius: 10px;
+  padding: 0.3rem 0.7rem;
   font-family: inherit;
   font-size: 0.82rem;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .create-group-selected-friend-chip:hover {
   background: rgba(99, 102, 241, 0.34);
+}
+
+/* Sub-email under name inside chip */
+.chip-email-sub {
+  font-size: 0.72rem;
+  color: rgba(165, 180, 252, 0.7);
+  font-family: 'Courier New', monospace;
+}
+
+/* Email-only chip (no name available) */
+.chip-email-only {
+  font-family: 'Courier New', monospace;
+  font-size: 0.8rem;
+}
+
+/* Remove × */
+.chip-remove {
+  margin-left: 0.1rem;
+  opacity: 0.55;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.create-group-selected-friend-chip:hover .chip-remove {
+  opacity: 1;
 }
 
 .create-group-error-text {
