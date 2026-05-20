@@ -435,6 +435,7 @@ const GroupDetails = () => {
     date: new Date().toISOString().split('T')[0],
     note: ''
   });
+  const [upiPaymentFired, setUpiPaymentFired] = useState(false);
   const [editExpenseError, setEditExpenseError] = useState('');
   const [editExpenseForm, setEditExpenseForm] = useState({
     description: '',
@@ -1362,6 +1363,7 @@ const GroupDetails = () => {
     const defaultMax = maxPayableToUser(defaultRecipientId);
 
     setSettleError('');
+    setUpiPaymentFired(false);
     setSettleForm({
       to_user_id: defaultRecipientId,
       amount: defaultMax > 0 ? defaultMax.toFixed(2) : '',
@@ -1373,6 +1375,7 @@ const GroupDetails = () => {
 
   const updateSettleRecipient = (recipientId) => {
     const nextMax = maxPayableToUser(recipientId);
+    setUpiPaymentFired(false);
 
     setSettleForm((prev) => {
       const currentAmount = parseFloat(prev.amount || 0);
@@ -1383,6 +1386,31 @@ const GroupDetails = () => {
 
       return { ...prev, to_user_id: recipientId, amount: nextAmount };
     });
+  };
+
+  const buildUpiLink = (recipientUpiId, amount, note, recipientName) => {
+    const params = new URLSearchParams({
+      pa: recipientUpiId,
+      pn: recipientName,
+      am: parseFloat(amount).toFixed(2),
+      cu: 'INR',
+      tn: note?.trim() || `TripSplit: ${group?.name || 'settlement'}`
+    });
+    return `upi://pay?${params.toString()}`;
+  };
+
+  const handleOpenUpiApp = () => {
+    const recipient = settlementCandidates.find((e) => e.user.id === settleForm.to_user_id);
+    if (!recipient?.user?.upi_id) return;
+    const link = buildUpiLink(
+      recipient.user.upi_id,
+      settleForm.amount,
+      settleForm.note,
+      recipient.user.name
+    );
+    window.location.href = link;
+    // Give the OS a moment to intercept; then reveal the confirm step
+    setTimeout(() => setUpiPaymentFired(true), 1200);
   };
 
   const handleSettlePayment = async (e) => {
@@ -2364,82 +2392,198 @@ const GroupDetails = () => {
         </div>
       )}
 
-      {showSettleModal && (
-        <div className="modal-overlay">
-          <div className="glass-panel animate-fade-in modal-card" style={{ width: '100%', maxWidth: 500 }}>
-            <h3 style={{ marginBottom: '0.8rem' }}>Settle Up</h3>
-            <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '1rem' }}>
-              Record a full or partial payment. Your current total due is <strong style={{ color: 'var(--text-primary)' }}>{currencySym}{currentUserDebt.toFixed(2)}</strong>.
-            </p>
+      {showSettleModal && (() => {
+        const settleRecipient = settlementCandidates.find((e) => e.user.id === settleForm.to_user_id);
+        const recipientUpiId = settleRecipient?.user?.upi_id || null;
+        const isInr = group.currency === 'INR';
+        const canUseUpi = isInr && !!recipientUpiId;
+        const amountNum = parseFloat(settleForm.amount || 0);
+        const amountValid = amountNum > 0 && amountNum <= settleRecipientMaxAmount + 0.001;
 
-            <form onSubmit={handleSettlePayment} className="flex flex-col gap-3">
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <label>Pay To</label>
-                <CustomSelect
-                  value={settleForm.to_user_id}
-                  options={settlementRecipientOptions}
-                  onChange={(nextValue) => updateSettleRecipient(nextValue)}
-                />
+        return (
+          <div className="modal-overlay">
+            <div className="settle-modal-card glass-panel animate-fade-in modal-card">
+
+              {/* ── Header ── */}
+              <div className="settle-modal-header">
+                <div>
+                  <h3 className="settle-modal-title">Settle Up</h3>
+                  <p className="settle-modal-subtitle">Record a payment to clear your balance</p>
+                </div>
+                <div className="settle-modal-debt-pill">
+                  <span className="settle-modal-debt-label">You owe</span>
+                  <span className="settle-modal-debt-amount">{currencySym}{currentUserDebt.toFixed(2)}</span>
+                </div>
               </div>
 
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <label>Amount ({group.currency})</label>
-                <input
-                  required
-                  type="number"
-                  min="0.01"
-                  step="0.01"
-                  value={settleForm.amount}
-                  onChange={(e) => setSettleForm((prev) => ({ ...prev, amount: e.target.value }))}
-                />
-              </div>
+              <div className="settle-modal-divider" />
 
-              <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                Maximum you can settle with this member right now: {currencySym}{settleRecipientMaxAmount.toFixed(2)}
-              </div>
+              <form onSubmit={handleSettlePayment} className="settle-modal-body">
 
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <label>Date</label>
-                <CustomDateInput
-                  required
-                  value={settleForm.date}
-                  onChange={(nextDate) => setSettleForm((prev) => ({ ...prev, date: nextDate }))}
-                />
-              </div>
+                {/* Pay To */}
+                <div className="form-group settle-form-group">
+                  <label>Pay To</label>
+                  <CustomSelect
+                    value={settleForm.to_user_id}
+                    options={settlementRecipientOptions}
+                    onChange={(nextValue) => updateSettleRecipient(nextValue)}
+                    disabled={upiPaymentFired}
+                  />
+                </div>
 
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <label>Note (Optional)</label>
-                <textarea
-                  rows={3}
-                  value={settleForm.note}
-                  onChange={(e) => setSettleForm((prev) => ({ ...prev, note: e.target.value }))}
-                  placeholder="UPI / cash / bank reference..."
-                />
-              </div>
+                {/* Amount + Date row */}
+                <div className="settle-amount-date-row">
+                  <div className="form-group settle-form-group" style={{ flex: 1 }}>
+                    <label>Amount <span className="settle-currency-tag">{group.currency}</span></label>
+                    <input
+                      required
+                      type="number"
+                      min="0.01"
+                      step="0.01"
+                      value={settleForm.amount}
+                      disabled={upiPaymentFired}
+                      onChange={(e) => setSettleForm((prev) => ({ ...prev, amount: e.target.value }))}
+                    />
+                    <span className="settle-max-hint">
+                      Max {currencySym}{settleRecipientMaxAmount.toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="form-group settle-form-group" style={{ flex: 1 }}>
+                    <label>Date</label>
+                    <CustomDateInput
+                      required
+                      value={settleForm.date}
+                      disabled={upiPaymentFired}
+                      onChange={(nextDate) => setSettleForm((prev) => ({ ...prev, date: nextDate }))}
+                    />
+                  </div>
+                </div>
 
-              {settleError && <div className="error-text" style={{ margin: 0 }}>{settleError}</div>}
+                {/* UPI block — primary action, shown before Note */}
+                {canUseUpi && !upiPaymentFired && (
+                  <div className="upi-block">
+                    <div className="upi-block-header">
+                      <span className="upi-badge">UPI</span>
+                      <span className="upi-block-title">Pay instantly via any UPI app</span>
+                    </div>
+                    <div className="upi-id-row">
+                      <span className="upi-id-label">UPI ID</span>
+                      <span className="upi-id-value">{recipientUpiId}</span>
+                      <button
+                        type="button"
+                        className="upi-copy-btn"
+                        title="Copy UPI ID"
+                        onClick={() => navigator.clipboard.writeText(recipientUpiId)}
+                      >
+                        Copy
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn upi-pay-btn"
+                      disabled={!amountValid || settlingPayment}
+                      onClick={handleOpenUpiApp}
+                    >
+                      <span className="upi-pay-icon">⚡</span>
+                      Pay {currencySym}{amountValid ? amountNum.toFixed(2) : '—'} via UPI App
+                    </button>
+                    <p className="upi-hint">
+                      Opens GPay, PhonePe, Paytm or any UPI app pre-filled. Come back and confirm after paying.
+                    </p>
+                  </div>
+                )}
 
-              <div className="flex gap-3" style={{ marginTop: '0.5rem' }}>
-                <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={settlingPayment}>
-                  {settlingPayment ? 'Recording...' : 'Record Settlement'}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-secondary"
-                  onClick={() => {
-                    if (settlingPayment) return;
-                    setShowSettleModal(false);
-                    setSettleError('');
-                  }}
-                  disabled={settlingPayment}
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
+                {/* No-UPI fallback */}
+                {!canUseUpi && settleRecipient && (
+                  <div className="upi-fallback-block">
+                    <span style={{ fontSize: '1rem' }}>ℹ️</span>
+                    <span>
+                      {isInr
+                        ? <>{settleRecipient.user.name} hasn't added a UPI ID. Pay via cash or bank transfer, then record it below.</>
+                        : <>UPI is only supported for INR groups.</>}
+                    </span>
+                  </div>
+                )}
+
+                {/* Note */}
+                <div className="form-group settle-form-group">
+                  <label>Note <span className="field-optional">(optional)</span></label>
+                  <textarea
+                    rows={2}
+                    value={settleForm.note}
+                    disabled={upiPaymentFired}
+                    onChange={(e) => setSettleForm((prev) => ({ ...prev, note: e.target.value }))}
+                    placeholder="e.g. GPay ref #12345, cash handover…"
+                  />
+                </div>
+
+                {/* Post-UPI confirm panel */}
+                {upiPaymentFired && (
+                  <div className="upi-confirm-block animate-fade-in">
+                    <div className="upi-confirm-icon">✅</div>
+                    <p className="upi-confirm-title">Did your UPI payment go through?</p>
+                    <p className="upi-confirm-body">
+                      If successful, click <strong>Confirm & Record</strong> to mark it settled.
+                      If something went wrong, click <strong>Go Back</strong>.
+                    </p>
+                  </div>
+                )}
+
+                {settleError && <div className="error-text" style={{ margin: 0 }}>{settleError}</div>}
+
+                {/* Actions */}
+                <div className="settle-modal-actions">
+                  {!upiPaymentFired ? (
+                    <>
+                      <button
+                        type="submit"
+                        className="btn btn-secondary settle-action-btn"
+                        disabled={settlingPayment}
+                      >
+                        {settlingPayment ? 'Recording…' : canUseUpi ? 'Paid Externally' : 'Record Settlement'}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-ghost settle-action-btn"
+                        onClick={() => {
+                          if (settlingPayment) return;
+                          setShowSettleModal(false);
+                          setSettleError('');
+                          setUpiPaymentFired(false);
+                        }}
+                        disabled={settlingPayment}
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        type="submit"
+                        className="btn btn-primary settle-action-btn"
+                        disabled={settlingPayment}
+                      >
+                        {settlingPayment ? 'Recording…' : 'Confirm & Record'}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-ghost settle-action-btn"
+                        onClick={() => {
+                          setUpiPaymentFired(false);
+                          setSettleError('');
+                        }}
+                        disabled={settlingPayment}
+                      >
+                        Go Back
+                      </button>
+                    </>
+                  )}
+                </div>
+              </form>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
       
       {/* Styles for dynamic text colors */}
       <style>{`

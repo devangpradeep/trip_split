@@ -13,7 +13,7 @@ module Api
         result = balances.map do |user_id, amount|
           user = users_by_id[user_id]
           {
-            user: { id: user&.id, name: user&.name, avatar_url: user&.avatar_url },
+            user: { id: user&.id, name: user&.name, avatar_url: user&.avatar_url, upi_id: user&.upi_id },
             balance: amount.to_f
           }
         end
