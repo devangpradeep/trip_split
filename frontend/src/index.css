@@ -2420,3 +2420,316 @@ body.app-installed {
     grid-template-columns: 1fr;
   }
 }
+
+/* ── Settle Modal Layout ───────────────────────────────────── */
+.settle-modal-card {
+  width: 100%;
+  max-width: 520px;
+  padding: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100dvh - 2rem);
+}
+
+.settle-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.5rem 1.75rem 1.25rem;
+}
+
+.settle-modal-title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 0 0 0.2rem;
+}
+
+.settle-modal-subtitle {
+  font-size: 0.83rem;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.settle-modal-debt-pill {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.1rem;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.22);
+  border-radius: 12px;
+  padding: 0.45rem 0.9rem;
+}
+
+.settle-modal-debt-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(252, 165, 165, 0.85);
+}
+
+.settle-modal-debt-amount {
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #fca5a5;
+  line-height: 1.1;
+}
+
+.settle-modal-divider {
+  height: 1px;
+  background: var(--surface-border);
+  flex-shrink: 0;
+}
+
+.settle-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  padding: 1.4rem 1.75rem 1.5rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.settle-modal-body::-webkit-scrollbar {
+  width: 5px;
+}
+
+.settle-modal-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.settle-modal-body::-webkit-scrollbar-thumb {
+  background: rgba(148, 163, 184, 0.22);
+  border-radius: 10px;
+}
+
+/* Form group inside settle modal — no extra bottom margin */
+.settle-form-group {
+  margin-bottom: 0 !important;
+}
+
+/* Amount + Date side by side */
+.settle-amount-date-row {
+  display: flex;
+  gap: 0.85rem;
+}
+
+@media (max-width: 420px) {
+  .settle-amount-date-row {
+    flex-direction: column;
+    gap: 1rem;
+  }
+}
+
+/* Currency pill next to the Amount label */
+.settle-currency-tag {
+  display: inline-block;
+  margin-left: 0.3rem;
+  padding: 0.08rem 0.38rem;
+  border-radius: 5px;
+  background: rgba(99, 102, 241, 0.16);
+  color: #a5b4fc;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  vertical-align: middle;
+}
+
+/* Max payable hint under amount */
+.settle-max-hint {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  margin-top: -0.15rem;
+}
+
+/* Action buttons bar */
+.settle-modal-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 0.25rem;
+}
+
+.settle-action-btn {
+  flex: 1;
+}
+
+/* ── UPI Payment Block ─────────────────────────────────────── */
+.upi-block {
+  border-radius: 16px;
+  padding: 1rem 1.1rem;
+  background:
+    linear-gradient(135deg, rgba(16, 185, 129, 0.12) 0%, rgba(5, 150, 105, 0.07) 100%),
+    rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.upi-block-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.upi-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #10b981, #059669);
+  color: #fff;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  border-radius: 6px;
+  padding: 0.18rem 0.48rem;
+  flex-shrink: 0;
+}
+
+.upi-block-title {
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: #d1fae5;
+}
+
+.upi-id-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  background: rgba(0, 0, 0, 0.18);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  border-radius: 10px;
+  padding: 0.5rem 0.75rem;
+  min-width: 0;
+}
+
+.upi-id-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #6ee7b7;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  flex-shrink: 0;
+}
+
+.upi-id-value {
+  flex: 1;
+  font-size: 0.88rem;
+  color: #ecfdf5;
+  font-family: 'Courier New', monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.upi-copy-btn {
+  flex-shrink: 0;
+  padding: 0.2rem 0.55rem;
+  border-radius: 7px;
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  background: rgba(16, 185, 129, 0.12);
+  color: #6ee7b7;
+  font-size: 0.75rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background-color 0.18s ease, color 0.18s ease;
+}
+
+.upi-copy-btn:hover {
+  background: rgba(16, 185, 129, 0.25);
+  color: #ffffff;
+}
+
+.upi-pay-btn {
+  width: 100%;
+  padding: 0.85rem 1.2rem;
+  border-radius: 14px;
+  font-size: 1rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: #fff;
+  border: none;
+  box-shadow: 0 6px 24px rgba(16, 185, 129, 0.35);
+  transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.22s ease, opacity 0.2s ease;
+  gap: 0.5rem;
+}
+
+.upi-pay-btn:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 32px rgba(16, 185, 129, 0.48);
+}
+
+.upi-pay-btn:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.upi-pay-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+.upi-pay-icon {
+  font-style: normal;
+  font-size: 1.05rem;
+}
+
+.upi-hint {
+  font-size: 0.78rem;
+  color: rgba(110, 231, 183, 0.75);
+  line-height: 1.5;
+}
+
+/* Fallback notice when recipient has no UPI ID */
+.upi-fallback-block {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  padding: 0.8rem 1rem;
+  border-radius: 12px;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.22);
+  font-size: 0.86rem;
+  color: #fde68a;
+  line-height: 1.5;
+}
+
+/* Post-UPI confirmation panel */
+.upi-confirm-block {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 1.2rem 1rem;
+  border-radius: 16px;
+  background:
+    linear-gradient(135deg, rgba(99, 102, 241, 0.14), rgba(16, 185, 129, 0.08)),
+    rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(99, 102, 241, 0.28);
+  text-align: center;
+}
+
+.upi-confirm-icon {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.upi-confirm-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.upi-confirm-body {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
