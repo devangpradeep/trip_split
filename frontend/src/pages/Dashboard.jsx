@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/useAuth';
 import api, { groupMembersApi } from '../lib/api';
-import { LogOut, Plus, Users, ArrowRight, UserCircle, Archive, ChevronDown, ChevronRight } from 'lucide-react';
+import { LogOut, Plus, Users, ArrowRight, UserCircle, Archive, ChevronDown, ChevronRight, TrendingUp, TrendingDown, Search, X } from 'lucide-react';
 import NotificationBell from '../components/NotificationBell';
 
 const normalizeGroup = (payload) => payload?.group || payload?.data || payload || null;
@@ -13,6 +13,33 @@ const normalizeGroups = (payload) => {
 };
 
 const ARCHIVED_GROUPS_COLLAPSED_KEY = 'tripsplit:archived-groups-collapsed';
+const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((value || '').trim());
+
+const formatRelativeTime = (dateString) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now - date;
+  if (diffMs < 0) return 'Updated just now';
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMins < 1) return 'Updated just now';
+  if (diffMins < 60) return `Updated ${diffMins}m ago`;
+  if (diffHours < 24) return `Updated ${diffHours}h ago`;
+  if (diffDays === 1) return 'Updated yesterday';
+  if (diffDays < 7) return `Updated ${diffDays}d ago`;
+
+  const diffWeeks = Math.floor(diffDays / 7);
+  if (diffWeeks < 4) return `Updated ${diffWeeks}w ago`;
+
+  const diffMonths = Math.floor(diffDays / 30);
+  if (diffMonths < 12) return `Updated ${diffMonths}mo ago`;
+
+  const diffYears = Math.floor(diffDays / 365);
+  return `Updated ${diffYears}y ago`;
+};
 
 const DashboardCustomSelect = ({ value, options, onChange, disabled = false }) => {
   const [open, setOpen] = useState(false);
@@ -88,6 +115,7 @@ const Dashboard = () => {
   const [selectedNewGroupFriends, setSelectedNewGroupFriends] = useState([]);
   const [creatingGroup, setCreatingGroup] = useState(false);
   const [createGroupError, setCreateGroupError] = useState('');
+  const [groupSearchQuery, setGroupSearchQuery] = useState('');
   const [archivedGroupsCollapsed, setArchivedGroupsCollapsed] = useState(() => (
     localStorage.getItem(ARCHIVED_GROUPS_COLLAPSED_KEY) === 'true'
   ));
@@ -140,8 +168,15 @@ const Dashboard = () => {
   const selectedFriendEmailSet = new Set(
     selectedNewGroupFriends.map((friend) => friend.email)
   );
-  const activeGroups = groups.filter((group) => group.status !== 'archived' && !group.archived_at);
-  const archivedGroups = groups.filter((group) => group.status === 'archived' || group.archived_at);
+  const searchQuery = groupSearchQuery.trim().toLowerCase();
+  const activeGroups = groups
+    .filter((group) => group.status !== 'archived' && !group.archived_at)
+    .filter((group) => !searchQuery || group.name.toLowerCase().includes(searchQuery));
+  const archivedGroups = groups
+    .filter((group) => group.status === 'archived' || group.archived_at)
+    .filter((group) => !searchQuery || group.name.toLowerCase().includes(searchQuery));
+  const isSearching = searchQuery.length > 0;
+  const totalMatchCount = activeGroups.length + archivedGroups.length;
 
   const filteredFriendSuggestions = uniqueFriendCandidates.filter((friend) => {
     if (selectedFriendEmailSet.has(friend.email)) return false;
@@ -154,6 +189,13 @@ const Dashboard = () => {
       friend.email.toLowerCase().includes(query)
     );
   }).slice(0, 8);
+
+  // Direct email entry option — shown when the query is a valid email not yet selected
+  const trimmedQuery = newGroupFriendQuery.trim();
+  const emailFriendOption = (
+    isValidEmail(trimmedQuery) &&
+    !selectedFriendEmailSet.has(trimmedQuery.toLowerCase())
+  ) ? { id: null, name: '', email: trimmedQuery.toLowerCase() } : null;
 
   const handleCreateGroup = async (e) => {
     e.preventDefault();
@@ -226,13 +268,47 @@ const Dashboard = () => {
     });
   };
 
+  const currencySymbol = (currency) => (
+    currency === 'INR' ? '₹' : currency === 'USD' ? '$' : '€'
+  );
+
+  const groupBalanceChip = (group, archived) => {
+    if (archived) return null;
+    const balance = group.current_user_balance;
+    if (balance === undefined || balance === null) return null;
+    const sym = currencySymbol(group.currency);
+    const abs = Math.abs(balance).toFixed(2);
+
+    if (balance > 0.01) {
+      return (
+        <span className="group-card-balance-chip chip-owed">
+          <TrendingUp size={13} />
+          You're owed {sym}{abs}
+        </span>
+      );
+    }
+    if (balance < -0.01) {
+      return (
+        <span className="group-card-balance-chip chip-owes">
+          <TrendingDown size={13} />
+          You owe {sym}{abs}
+        </span>
+      );
+    }
+    return (
+      <span className="group-card-balance-chip chip-settled">
+        ✓ Settled
+      </span>
+    );
+  };
+
   const renderGroupCard = (group, archived = false) => (
     <Link
       key={group.id}
       to={`/groups/${group.id}`}
       className="glass-panel group-card-link"
     >
-      <div className="flex justify-between items-start" style={{ marginBottom: '1rem', gap: '0.75rem' }}>
+      <div className="flex justify-between items-start" style={{ marginBottom: '0.6rem', gap: '0.75rem' }}>
         <div>
           <h3 className="font-bold text-2xl">{group.name}</h3>
           {archived && (
@@ -252,9 +328,14 @@ const Dashboard = () => {
         </p>
       )}
 
+      {groupBalanceChip(group, archived)}
+
       <div className="flex items-center gap-2 text-secondary group-card-footer">
         <Users size={16} />
-        <span style={{ fontSize: '0.9rem' }}>{group.members?.length || 1} members</span>
+        <span style={{ fontSize: '0.9rem' }}>
+          {group.members?.length || 1} members
+          {group.last_activity_at && ` • ${formatRelativeTime(group.last_activity_at)}`}
+        </span>
         <ArrowRight size={16} style={{ marginLeft: 'auto', color: 'var(--primary-color)' }} />
       </div>
     </Link>
@@ -281,7 +362,7 @@ const Dashboard = () => {
       </header>
 
       {/* Main Content */}
-      <div className="dashboard-toolbar" style={{ marginBottom: '1.5rem' }}>
+      <div className="dashboard-toolbar" style={{ marginBottom: '1rem' }}>
         <h2 className="text-2xl font-bold">Your Groups</h2>
         <button 
           className="btn btn-primary"
@@ -290,6 +371,33 @@ const Dashboard = () => {
           <Plus size={18} /> New Group
         </button>
       </div>
+
+      {groups.length > 0 && (
+        <div className="group-search-bar" style={{ marginBottom: '1.5rem' }}>
+          <Search size={16} className="group-search-icon" />
+          <input
+            id="group-search-input"
+            type="search"
+            className="group-search-input"
+            placeholder="Search groups by name…"
+            value={groupSearchQuery}
+            onChange={(e) => setGroupSearchQuery(e.target.value)}
+            autoComplete="off"
+            autoCorrect="off"
+            spellCheck={false}
+          />
+          {groupSearchQuery && (
+            <button
+              type="button"
+              className="group-search-clear"
+              onClick={() => setGroupSearchQuery('')}
+              aria-label="Clear search"
+            >
+              <X size={14} />
+            </button>
+          )}
+        </div>
+      )}
 
       {showAddGroup && (
         <div className="glass-panel animate-fade-in" style={{ marginBottom: '2rem' }}>
@@ -329,24 +437,30 @@ const Dashboard = () => {
               />
             </div>
             <div className="form-group create-group-friends-field" style={{ margin: 0 }}>
-              <label style={{ marginBottom: '0.35rem' }}>Add friends (optional)</label>
+              <label style={{ marginBottom: '0.35rem' }}>Add friends <span className="field-optional">Optional — name or email</span></label>
               <input
                 type="search"
                 name="create_group_friend_lookup"
                 value={newGroupFriendQuery}
                 onChange={(e) => setNewGroupFriendQuery(e.target.value)}
-                placeholder="Type a name (e.g., Test)"
+                placeholder="Search by name or enter any email address"
                 autoComplete="new-password"
                 autoCorrect="off"
                 autoCapitalize="none"
                 spellCheck={false}
-                inputMode="search"
+                inputMode="email"
                 data-lpignore="true"
                 data-1p-ignore="true"
                 data-bwignore="true"
                 data-form-type="other"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && emailFriendOption) {
+                    e.preventDefault();
+                    handleAddFriendSelection(emailFriendOption);
+                  }
+                }}
               />
-              {newGroupFriendQuery.trim() && filteredFriendSuggestions.length > 0 && (
+              {newGroupFriendQuery.trim() && (filteredFriendSuggestions.length > 0 || emailFriendOption) && (
                 <div className="create-group-friend-suggestions">
                   {filteredFriendSuggestions.map((friend) => (
                     <button
@@ -355,9 +469,20 @@ const Dashboard = () => {
                       className="create-group-friend-suggestion-btn"
                       onClick={() => handleAddFriendSelection(friend)}
                     >
-                      {friend.name} ({friend.email})
+                      <span className="friend-suggestion-name">{friend.name}</span>
+                      <span className="friend-suggestion-email">{friend.email}</span>
                     </button>
                   ))}
+                  {emailFriendOption && (
+                    <button
+                      type="button"
+                      className="create-group-friend-suggestion-btn friend-suggestion-email-direct"
+                      onClick={() => handleAddFriendSelection(emailFriendOption)}
+                    >
+                      <span className="friend-suggestion-direct-label">Add by email</span>
+                      <span className="friend-suggestion-email">{emailFriendOption.email}</span>
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -389,9 +514,13 @@ const Dashboard = () => {
                     type="button"
                     className="create-group-selected-friend-chip"
                     onClick={() => handleRemoveSelectedFriend(friend.email)}
-                    title="Remove friend"
+                    title="Remove"
                   >
-                    {friend.name} ×
+                    {friend.name
+                      ? <><span>{friend.name}</span><span className="chip-email-sub">{friend.email}</span></>
+                      : <span className="chip-email-only">{friend.email}</span>
+                    }
+                    <span className="chip-remove">&times;</span>
                   </button>
                 ))}
               </div>
@@ -421,18 +550,29 @@ const Dashboard = () => {
             <Plus size={18} /> Create your first group
           </button>
         </div>
+      ) : isSearching && totalMatchCount === 0 ? (
+        <div className="glass-panel text-center animate-fade-in" style={{ padding: '3rem 2rem' }}>
+          <Search size={36} style={{ color: 'var(--text-secondary)', margin: '0 auto 1rem' }} />
+          <h3 className="text-2xl font-bold" style={{ marginBottom: '0.5rem' }}>No groups found</h3>
+          <p className="text-secondary" style={{ marginBottom: '1.25rem' }}>
+            No groups match <strong>"{groupSearchQuery}"</strong>
+          </p>
+          <button className="btn btn-secondary" onClick={() => setGroupSearchQuery('')}>
+            Clear search
+          </button>
+        </div>
       ) : (
         <div className="dashboard-groups-stack">
           {activeGroups.length > 0 ? (
             <div className="group-card-grid">
               {activeGroups.map((group) => renderGroupCard(group))}
             </div>
-          ) : (
+          ) : !isSearching ? (
             <div className="glass-panel text-center" style={{ padding: '2.5rem 2rem' }}>
               <h3 className="text-2xl font-bold" style={{ marginBottom: '0.5rem' }}>No active groups</h3>
               <p className="text-secondary">Create a group or restore one from the archived section.</p>
             </div>
-          )}
+          ) : null}
 
           {archivedGroups.length > 0 && (
             <section className="archived-groups-section">

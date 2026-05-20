@@ -108,7 +108,14 @@ module Api
       def group_payload(group)
         archived = group.archived?
         owner = group.created_by_id == current_user.id
-        settled = balances_settled?(group)
+        balances = Balances::Calculator.new(group).call
+        settled = balances.values.all? { |b| b.abs <= BigDecimal('0.01') }
+        current_user_balance = (balances[current_user.id] || 0).to_f
+        last_act = [
+          group.updated_at,
+          group.expenses.maximum(:updated_at),
+          group.settlements.maximum(:updated_at)
+        ].compact.max
 
         {
           id: group.id,
@@ -125,6 +132,8 @@ module Api
           can_restore: owner && archived,
           can_delete: owner && settled,
           balances_settled: settled,
+          current_user_balance: current_user_balance,
+          last_activity_at: last_act&.iso8601,
           expense_count: group.expenses.count,
           settlement_count: group.settlements.count
         }

@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 class Expense < ApplicationRecord
-  belongs_to :group
+  belongs_to :group, touch: true
   belongs_to :paid_by, class_name: 'User'
   belongs_to :created_by, class_name: 'User'
   has_many :expense_splits, dependent: :destroy
