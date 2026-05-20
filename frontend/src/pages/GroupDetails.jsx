@@ -14,7 +14,10 @@ import {
   ChevronRight,
   Settings,
   Archive,
-  RotateCcw
+  RotateCcw,
+  Camera,
+  X,
+  Image
 } from 'lucide-react';
 import NotificationBell from '../components/NotificationBell';
 
@@ -446,6 +449,11 @@ const GroupDetails = () => {
     splits: []
   });
   const [expenseForm, setExpenseForm] = useState(() => buildDefaultExpenseForm());
+  const [receiptFile, setReceiptFile] = useState(null);
+  const [editReceiptFile, setEditReceiptFile] = useState(null);
+  const [receiptLightbox, setReceiptLightbox] = useState(null);
+  const receiptInputRef = useRef(null);
+  const editReceiptInputRef = useRef(null);
   const groupDataFetchInFlightRef = useRef(false);
 
   const fetchGroupData = useCallback(async () => {
@@ -586,20 +594,41 @@ const GroupDetails = () => {
 
     try {
       setAddExpenseError('');
-      await api.post(`/groups/${id}/expenses`, {
-        expense: {
-          description: expenseForm.description,
-          amount: expenseForm.amount,
-          date: expenseForm.date,
-          currency: group.currency,
-          paid_by_id: expenseForm.paid_by_id || user.id,
-          split_type: expenseForm.split_type,
-          splits: splitsPayload
-        }
-      });
+
+      const expenseData = {
+        description: expenseForm.description,
+        amount: expenseForm.amount,
+        date: expenseForm.date,
+        currency: group.currency,
+        paid_by_id: expenseForm.paid_by_id || user.id,
+        split_type: expenseForm.split_type,
+        splits: splitsPayload
+      };
+
+      if (receiptFile) {
+        const formData = new FormData();
+        Object.entries(expenseData).forEach(([key, value]) => {
+          if (key === 'splits') {
+            value.forEach((split, i) => {
+              Object.entries(split).forEach(([sk, sv]) => {
+                formData.append(`expense[splits][][${sk}]`, sv);
+              });
+            });
+          } else {
+            formData.append(`expense[${key}]`, value);
+          }
+        });
+        formData.append('expense[receipt]', receiptFile);
+        await api.post(`/groups/${id}/expenses`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+      } else {
+        await api.post(`/groups/${id}/expenses`, { expense: expenseData });
+      }
       
       setShowAddExpense(false);
       setExpenseForm(buildDefaultExpenseForm(group.members, user.id));
+      setReceiptFile(null);
       fetchGroupData(); // Refresh all data
     } catch (error) {
       const serverError = error.response?.data?.errors?.join(', ');
@@ -1090,13 +1119,15 @@ const GroupDetails = () => {
 
     setEditExpenseError('');
     setEditingExpenseId(expense.id);
+    setEditReceiptFile(null);
     setEditExpenseForm({
       description: expense.description || '',
       amount: parseFloat(expense.amount || 0).toFixed(2),
       date: expense.date || new Date().toISOString().split('T')[0],
       split_type: uiSplitType || 'equal',
       paid_by_id: expense.paid_by?.id || user.id,
-      splits: formSplits
+      splits: formSplits,
+      receipt_url: expense.receipt_url || null
     });
     setShowEditExpense(true);
   };
@@ -1187,20 +1218,41 @@ const GroupDetails = () => {
     try {
       setSavingExpense(true);
       setEditExpenseError('');
-      await api.patch(`/groups/${id}/expenses/${editingExpenseId}`, {
-        expense: {
-          description: editExpenseForm.description,
-          amount: editExpenseForm.amount,
-          date: editExpenseForm.date,
-          currency: group.currency,
-          paid_by_id: editExpenseForm.paid_by_id,
-          split_type: editExpenseForm.split_type,
-          splits: splitsPayload
-        }
-      });
+
+      const expenseData = {
+        description: editExpenseForm.description,
+        amount: editExpenseForm.amount,
+        date: editExpenseForm.date,
+        currency: group.currency,
+        paid_by_id: editExpenseForm.paid_by_id,
+        split_type: editExpenseForm.split_type,
+        splits: splitsPayload
+      };
+
+      if (editReceiptFile) {
+        const formData = new FormData();
+        Object.entries(expenseData).forEach(([key, value]) => {
+          if (key === 'splits') {
+            value.forEach((split, i) => {
+              Object.entries(split).forEach(([sk, sv]) => {
+                formData.append(`expense[splits][][${sk}]`, sv);
+              });
+            });
+          } else {
+            formData.append(`expense[${key}]`, value);
+          }
+        });
+        formData.append('expense[receipt]', editReceiptFile);
+        await api.patch(`/groups/${id}/expenses/${editingExpenseId}`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+      } else {
+        await api.patch(`/groups/${id}/expenses/${editingExpenseId}`, { expense: expenseData });
+      }
 
       setShowEditExpense(false);
       setEditingExpenseId(null);
+      setEditReceiptFile(null);
       fetchGroupData();
     } catch (error) {
       const serverError = error.response?.data?.errors?.join(', ');
@@ -1675,6 +1727,49 @@ const GroupDetails = () => {
 
                 {addExpenseError && <div className="error-text" style={{ margin: 0 }}>{addExpenseError}</div>}
 
+                <div className="receipt-upload-section">
+                  <input
+                    ref={receiptInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/heic"
+                    capture="environment"
+                    style={{ display: 'none' }}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) setReceiptFile(file);
+                      e.target.value = '';
+                    }}
+                  />
+                  {receiptFile ? (
+                    <div className="receipt-preview">
+                      <img
+                        src={URL.createObjectURL(receiptFile)}
+                        alt="Receipt preview"
+                        className="receipt-preview-img"
+                        onClick={() => setReceiptLightbox(URL.createObjectURL(receiptFile))}
+                      />
+                      <div className="receipt-preview-info">
+                        <span className="receipt-preview-name">{receiptFile.name}</span>
+                        <button
+                          type="button"
+                          className="receipt-remove-btn"
+                          onClick={() => setReceiptFile(null)}
+                        >
+                          <X size={14} /> Remove
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      type="button"
+                      className="btn btn-secondary receipt-upload-btn"
+                      onClick={() => receiptInputRef.current?.click()}
+                    >
+                      <Camera size={16} /> Attach Receipt
+                    </button>
+                  )}
+                </div>
+
                 <div className="flex gap-3" style={{ marginTop: '0.5rem' }}>
                   <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Save</button>
                   <button
@@ -1683,6 +1778,7 @@ const GroupDetails = () => {
                     onClick={() => {
                       setShowAddExpense(false);
                       setAddExpenseError('');
+                      setReceiptFile(null);
                     }}
                   >
                     Cancel
@@ -1719,6 +1815,16 @@ const GroupDetails = () => {
                           </>
                         )}
                       </div>
+                      {expense.receipt_url && (
+                        <button
+                          type="button"
+                          className="expense-receipt-badge"
+                          onClick={() => setReceiptLightbox(expense.receipt_url)}
+                          title="View receipt"
+                        >
+                          <Image size={13} /> Receipt
+                        </button>
+                      )}
                     </div>
                   </div>
                   <div className="text-right expense-side">
@@ -1949,6 +2055,83 @@ const GroupDetails = () => {
 
               {editExpenseError && <div className="error-text" style={{ margin: 0 }}>{editExpenseError}</div>}
 
+              <div className="receipt-upload-section">
+                <input
+                  ref={editReceiptInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/heic"
+                  capture="environment"
+                  style={{ display: 'none' }}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) setEditReceiptFile(file);
+                    e.target.value = '';
+                  }}
+                />
+                {editReceiptFile ? (
+                  <div className="receipt-preview">
+                    <img
+                      src={URL.createObjectURL(editReceiptFile)}
+                      alt="Receipt preview"
+                      className="receipt-preview-img"
+                      onClick={() => setReceiptLightbox(URL.createObjectURL(editReceiptFile))}
+                    />
+                    <div className="receipt-preview-info">
+                      <span className="receipt-preview-name">{editReceiptFile.name}</span>
+                      <button
+                        type="button"
+                        className="receipt-remove-btn"
+                        onClick={() => setEditReceiptFile(null)}
+                      >
+                        <X size={14} /> Remove
+                      </button>
+                    </div>
+                  </div>
+                ) : editExpenseForm.receipt_url ? (
+                  <div className="receipt-preview">
+                    <img
+                      src={editExpenseForm.receipt_url}
+                      alt="Current receipt"
+                      className="receipt-preview-img"
+                      onClick={() => setReceiptLightbox(editExpenseForm.receipt_url)}
+                    />
+                    <div className="receipt-preview-info">
+                      <span className="receipt-preview-name">Current receipt</span>
+                      <button
+                        type="button"
+                        className="receipt-remove-btn"
+                        onClick={async () => {
+                          try {
+                            await api.delete(`/groups/${id}/expenses/${editingExpenseId}/remove_receipt`);
+                            setEditExpenseForm((prev) => ({ ...prev, receipt_url: null }));
+                            fetchGroupData();
+                          } catch {
+                            setEditExpenseError('Failed to remove receipt');
+                          }
+                        }}
+                      >
+                        <X size={14} /> Remove receipt
+                      </button>
+                      <button
+                        type="button"
+                        className="receipt-replace-btn"
+                        onClick={() => editReceiptInputRef.current?.click()}
+                      >
+                        <Camera size={14} /> Replace
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn-secondary receipt-upload-btn"
+                    onClick={() => editReceiptInputRef.current?.click()}
+                  >
+                    <Camera size={16} /> Attach Receipt
+                  </button>
+                )}
+              </div>
+
               <div className="flex gap-3" style={{ marginTop: '0.5rem' }}>
                 <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={savingExpense}>
                   {savingExpense ? 'Saving...' : 'Save Changes'}
@@ -1956,7 +2139,10 @@ const GroupDetails = () => {
                 <button
                   type="button"
                   className="btn btn-secondary"
-                  onClick={() => setShowEditExpense(false)}
+                  onClick={() => {
+                    setShowEditExpense(false);
+                    setEditReceiptFile(null);
+                  }}
                   disabled={savingExpense}
                 >
                   Cancel
@@ -2585,6 +2771,27 @@ const GroupDetails = () => {
         );
       })()}
       
+      {/* Receipt lightbox modal */}
+      {receiptLightbox && (
+        <div
+          className="receipt-lightbox-overlay"
+          onClick={() => setReceiptLightbox(null)}
+          onKeyDown={(e) => { if (e.key === 'Escape') setReceiptLightbox(null); }}
+          tabIndex={-1}
+        >
+          <div className="receipt-lightbox-content" onClick={(e) => e.stopPropagation()}>
+            <button
+              type="button"
+              className="receipt-lightbox-close"
+              onClick={() => setReceiptLightbox(null)}
+            >
+              <X size={20} />
+            </button>
+            <img src={receiptLightbox} alt="Receipt" className="receipt-lightbox-img" />
+          </div>
+        </div>
+      )}
+
       {/* Styles for dynamic text colors */}
       <style>{`
         .text-success { color: var(--success-color); }

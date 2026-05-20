@@ -5,20 +5,18 @@ module Api
     class ExpensesController < ApplicationController
       class SplitValidationError < StandardError; end
 
+      include Rails.application.routes.url_helpers
+
       before_action :authenticate_user!
       before_action :set_group
-      before_action :ensure_active_group!, only: %i[create update destroy]
-      before_action :set_expense, only: %i[show update destroy]
-      before_action :ensure_can_edit_expense!, only: %i[update]
+      before_action :ensure_active_group!, only: %i[create update destroy remove_receipt]
+      before_action :set_expense, only: %i[show update destroy remove_receipt]
+      before_action :ensure_can_edit_expense!, only: %i[update remove_receipt]
       before_action :ensure_can_delete_expense!, only: %i[destroy]
 
       def index
-        @expenses = @group.expenses.includes(:paid_by, :created_by, expense_splits: :user).order(date: :desc)
-        render json: @expenses, include: {
-          paid_by: { only: %i[id name avatar_url] },
-          created_by: { only: %i[id name avatar_url] },
-          expense_splits: { include: { user: { only: %i[id name avatar_url] } } }
-        }
+        @expenses = @group.expenses.includes(:paid_by, :created_by, receipt_attachment: :blob, expense_splits: :user).order(date: :desc)
+        render json: @expenses.map { |expense| expense_json(expense) }
       end
 
       def create
@@ -74,6 +72,11 @@ module Api
         notify_expense_deleted(recipients, description, amount, currency)
 
         head :no_content
+      end
+
+      def remove_receipt
+        @expense.receipt.purge if @expense.receipt.attached?
+        render_expense(@expense)
       end
 
       private
@@ -247,15 +250,35 @@ module Api
       end
 
       def render_expense(expense, status = :ok)
-        render json: expense, status: status, include: {
-          paid_by: { only: %i[id name avatar_url] },
-          created_by: { only: %i[id name avatar_url] },
-          expense_splits: { include: { user: { only: %i[id name avatar_url] } } }
-        }
+        render json: expense_json(expense), status: status
+      end
+
+      def expense_json(expense)
+        json = expense.as_json(
+          only: %i[id description amount currency split_type date category created_at updated_at],
+          include: {
+            paid_by: { only: %i[id name avatar_url] },
+            created_by: { only: %i[id name avatar_url] },
+            expense_splits: { include: { user: { only: %i[id name avatar_url] } } }
+          }
+        )
+        json.merge!(receipt_data(expense))
+        json
+      end
+
+      def receipt_data(expense)
+        if expense.receipt.attached?
+          {
+            receipt_url: rails_blob_url(expense.receipt, host: request.base_url),
+            receipt_filename: expense.receipt.blob.filename.to_s
+          }
+        else
+          { receipt_url: nil, receipt_filename: nil }
+        end
       end
 
       def expense_params
-        params.require(:expense).permit(:description, :amount, :currency, :split_type, :date, :category)
+        params.require(:expense).permit(:description, :amount, :currency, :split_type, :date, :category, :receipt)
       end
 
       def notify_expense_created(expense)

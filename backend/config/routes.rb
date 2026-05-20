@@ -33,7 +33,11 @@ Rails.application.routes.draw do
           post :restore
         end
 
-        resources :expenses, only: %i[index create show update destroy]
+        resources :expenses, only: %i[index create show update destroy] do
+          member do
+            delete :remove_receipt
+          end
+        end
         resources :settlements, only: %i[index create show destroy]
         resources :members, controller: 'group_members', only: %i[create destroy] do
           collection do
