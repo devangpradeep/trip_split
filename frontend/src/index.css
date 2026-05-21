@@ -2319,6 +2319,152 @@ body.app-installed {
   font-size: 0.92rem;
 }
 
+/* Settlement History */
+.settlement-history-panel {
+  margin-top: 1.25rem;
+  border-radius: 16px;
+  border: 1px solid var(--surface-border);
+  background: var(--surface);
+  overflow: hidden;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease;
+}
+
+.settlement-history-panel:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.2);
+}
+
+.settlement-history-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1.5rem;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--text-primary);
+}
+
+.settlement-history-toggle-left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.settlement-history-toggle h3 {
+  margin: 0;
+  font-size: 1rem;
+  color: var(--text-primary);
+}
+
+.settlement-history-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 0.4rem;
+  border-radius: 11px;
+  background: rgba(99, 102, 241, 0.15);
+  color: #818cf8;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.settlement-history-chevron {
+  color: var(--text-secondary);
+  transition: transform 0.2s ease;
+}
+
+.settlement-history-chevron.open {
+  transform: rotate(180deg);
+}
+
+.settlement-history-list {
+  padding: 0 1.5rem 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.settlement-history-empty {
+  padding: 0.75rem 0;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.settlement-history-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.65rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.settlement-history-row:last-child {
+  border-bottom: none;
+}
+
+.settlement-history-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  min-width: 0;
+}
+
+.settlement-history-who {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.88rem;
+}
+
+.settlement-history-from {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.settlement-history-arrow {
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.settlement-history-to {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.settlement-history-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.78rem;
+}
+
+.settlement-history-amount {
+  color: var(--success-color);
+  font-weight: 600;
+}
+
+.settlement-history-dot {
+  color: var(--text-secondary);
+  font-size: 0.65rem;
+}
+
+.settlement-history-date {
+  color: var(--text-secondary);
+}
+
+.settlement-history-note {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  font-style: italic;
+  margin-top: 0.1rem;
+}
+
 .group-members-card {
   display: flex;
   flex-direction: column;
@@ -2746,7 +2892,7 @@ body.app-installed {
   width: 100%;
   max-width: 520px;
   padding: 0;
-  overflow: hidden;
+  overflow: visible;
   display: flex;
   flex-direction: column;
   max-height: calc(100dvh - 2rem);
@@ -2811,7 +2957,7 @@ body.app-installed {
   flex-direction: column;
   gap: 1rem;
   padding: 1.4rem 1.75rem 1.5rem;
-  overflow-y: auto;
+  overflow: visible;
   overscroll-behavior: contain;
 }
 

@@ -17,7 +17,8 @@ import {
   RotateCcw,
   Camera,
   X,
-  Image
+  Image,
+  ChevronDown
 } from 'lucide-react';
 import NotificationBell from '../components/NotificationBell';
 
@@ -454,6 +455,8 @@ const GroupDetails = () => {
   const [receiptLightbox, setReceiptLightbox] = useState(null);
   const receiptInputRef = useRef(null);
   const editReceiptInputRef = useRef(null);
+  const [settlements, setSettlements] = useState([]);
+  const [showSettlementHistory, setShowSettlementHistory] = useState(false);
   const groupDataFetchInFlightRef = useRef(false);
 
   const fetchGroupData = useCallback(async () => {
@@ -461,15 +464,18 @@ const GroupDetails = () => {
 
     try {
       groupDataFetchInFlightRef.current = true;
-      const [groupRes, expensesRes, balancesRes] = await Promise.all([
+      const [groupRes, expensesRes, balancesRes, settlementsRes] = await Promise.all([
         api.get(`/groups/${id}`),
         api.get(`/groups/${id}/expenses`),
-        api.get(`/groups/${id}/balances`)
+        api.get(`/groups/${id}/balances`),
+        api.get(`/groups/${id}/settlements`)
       ]);
       setGroup(normalizeGroupPayload(groupRes.data));
       const expensesData = expensesRes.data;
       setExpenses(Array.isArray(expensesData) ? expensesData : (expensesData.expenses || expensesData.data || []));
       setBalances(balancesRes.data.balances || []);
+      const settlementsData = settlementsRes.data;
+      setSettlements(Array.isArray(settlementsData) ? settlementsData : (settlementsData.settlements || settlementsData.data || []));
     } catch (error) {
       console.error('Failed to fetch group data', error);
     } finally {
@@ -1910,6 +1916,62 @@ const GroupDetails = () => {
                   </div>
                 ))}
               </div>
+            </div>
+
+            {/* Settlement History */}
+            <div className="settlement-history-panel">
+              <button
+                type="button"
+                className="settlement-history-toggle"
+                onClick={() => setShowSettlementHistory(prev => !prev)}
+              >
+                <div className="settlement-history-toggle-left">
+                  <h3>Settlement History</h3>
+                  {settlements.length > 0 && (
+                    <span className="settlement-history-count">{settlements.length}</span>
+                  )}
+                </div>
+                <ChevronDown
+                  size={16}
+                  className={`settlement-history-chevron ${showSettlementHistory ? 'open' : ''}`}
+                />
+              </button>
+
+              {showSettlementHistory && (
+                <div className="settlement-history-list animate-fade-in">
+                  {settlements.length === 0 ? (
+                    <div className="settlement-history-empty">No settlements recorded yet</div>
+                  ) : (
+                    settlements.map(s => (
+                      <div key={s.id} className="settlement-history-row">
+                        <div className="settlement-history-info">
+                          <div className="settlement-history-who">
+                            <span className="settlement-history-from">
+                              {s.from_user.id === user.id ? 'You' : s.from_user.name}
+                            </span>
+                            <span className="settlement-history-arrow">→</span>
+                            <span className="settlement-history-to">
+                              {s.to_user.id === user.id ? 'You' : s.to_user.name}
+                            </span>
+                          </div>
+                          <div className="settlement-history-meta">
+                            <span className="settlement-history-amount">
+                              {currencySym}{parseFloat(s.amount).toFixed(2)}
+                            </span>
+                            <span className="settlement-history-dot">•</span>
+                            <span className="settlement-history-date">
+                              {formatExpenseDateLabel(s.date)}
+                            </span>
+                          </div>
+                          {s.note && (
+                            <div className="settlement-history-note">"{s.note}"</div>
+                          )}
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
