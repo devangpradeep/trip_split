@@ -49,6 +49,12 @@ class User < ApplicationRecord
 
   before_validation :normalize_profile_fields
 
+  # Guest users are placeholder records — they have a random password
+  # that is never used, so skip Devise's password validation for them.
+  def password_required?
+    is_guest? ? false : super
+  end
+
   private
 
   def normalize_profile_fields

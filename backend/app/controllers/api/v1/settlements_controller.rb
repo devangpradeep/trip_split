@@ -14,15 +14,16 @@ module Api
       def index
         @settlements = @group.settlements.includes(:from_user, :to_user).order(date: :desc)
         render json: @settlements, include: {
-          from_user: { only: %i[id name avatar_url] },
-          to_user: { only: %i[id name avatar_url] }
+          from_user: { only: %i[id name avatar_url is_guest] },
+          to_user: { only: %i[id name avatar_url is_guest] }
         }
       end
 
       def create
-        to_user = find_settlement_recipient!
+        from_user = resolve_from_user!
+        to_user = find_settlement_recipient!(from_user)
         amount = settlement_amount!
-        max_payable = max_payable_to(to_user.id)
+        max_payable = max_payable_to(to_user.id, from_user.id)
         raise SettlementValidationError, 'No payable balance found for this member' if max_payable <= 0
 
         if amount > max_payable
@@ -30,7 +31,7 @@ module Api
         end
 
         @settlement = @group.settlements.build(
-          from_user: current_user,
+          from_user: from_user,
           to_user: to_user,
           amount: amount,
           date: settlement_params[:date].presence || Date.current,
@@ -38,11 +39,11 @@ module Api
         )
 
         @settlement.save!
-        notify_settlement_created(@settlement)
+        notify_settlement_created(@settlement) unless from_user.is_guest?
 
         render json: @settlement, status: :created, include: {
-          from_user: { only: %i[id name avatar_url] },
-          to_user: { only: %i[id name avatar_url] }
+          from_user: { only: %i[id name avatar_url is_guest] },
+          to_user: { only: %i[id name avatar_url is_guest] }
         }
       rescue SettlementValidationError => e
         render json: { errors: [e.message] }, status: :unprocessable_entity
@@ -52,8 +53,8 @@ module Api
 
       def show
         render json: @settlement, include: {
-          from_user: { only: %i[id name avatar_url] },
-          to_user: { only: %i[id name avatar_url] }
+          from_user: { only: %i[id name avatar_url is_guest] },
+          to_user: { only: %i[id name avatar_url is_guest] }
         }
       end
 
@@ -84,16 +85,33 @@ module Api
       end
 
       def settlement_params
-        params.require(:settlement).permit(:to_user_id, :amount, :date, :note)
+        params.require(:settlement).permit(:to_user_id, :from_user_id, :amount, :date, :note)
       end
 
-      def find_settlement_recipient!
+      def resolve_from_user!
+        from_id = settlement_params[:from_user_id]
+        return current_user if from_id.blank?
+
+        # Proxy settlement: current_user must be admin/owner, target must be a guest
+        unless @group.created_by_id == current_user.id ||
+               @group.group_memberships.exists?(user_id: current_user.id, role: 'admin')
+          raise SettlementValidationError, 'Only admins can settle on behalf of others'
+        end
+
+        proxy = @group.members.find_by(id: from_id)
+        raise SettlementValidationError, 'Member not found in group' unless proxy
+        raise SettlementValidationError, 'Can only settle on behalf of guest members' unless proxy.is_guest?
+
+        proxy
+      end
+
+      def find_settlement_recipient!(from_user)
         recipient_id = settlement_params[:to_user_id]
         raise SettlementValidationError, 'Recipient is required' if recipient_id.blank?
 
         recipient = @group.members.find_by(id: recipient_id)
         raise SettlementValidationError, 'Recipient must be a member of this group' unless recipient
-        raise SettlementValidationError, 'You cannot settle with yourself' if recipient.id == current_user.id
+        raise SettlementValidationError, 'Cannot settle with the same person' if recipient.id == from_user.id
 
         recipient
       end
@@ -107,11 +125,11 @@ module Api
         raise SettlementValidationError, 'Invalid settlement amount'
       end
 
-      def max_payable_to(recipient_id)
+      def max_payable_to(recipient_id, from_user_id = current_user.id)
         balances = current_group_balances
-        current_user_owes = [-(balances[current_user.id] || 0), 0].max
+        payer_owes = [-(balances[from_user_id] || 0), 0].max
         recipient_is_owed = [balances[recipient_id] || 0, 0].max
-        [current_user_owes, recipient_is_owed].min
+        [payer_owes, recipient_is_owed].min
       end
 
       def current_group_balances

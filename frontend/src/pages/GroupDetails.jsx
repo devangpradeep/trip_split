@@ -383,6 +383,7 @@ const GroupDetails = () => {
   const [group, setGroup] = useState(null);
   const [expenses, setExpenses] = useState([]);
   const [balances, setBalances] = useState([]);
+  const [suggestedSettlements, setSuggestedSettlements] = useState([]);
   const [invites, setInvites] = useState([]);
   const [latestExpiredInvite, setLatestExpiredInvite] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -408,6 +409,7 @@ const GroupDetails = () => {
   const [addMemberError, setAddMemberError] = useState('');
   const [addMemberSuccess, setAddMemberSuccess] = useState('');
   const [memberEmailInput, setMemberEmailInput] = useState('');
+  const [memberGuestName, setMemberGuestName] = useState('');
   const [selectedSuggestedFriend, setSelectedSuggestedFriend] = useState(null);
   const [addingMember, setAddingMember] = useState(false);
   const [pendingRemoveMember, setPendingRemoveMember] = useState(null);
@@ -434,6 +436,7 @@ const GroupDetails = () => {
   const [settlingPayment, setSettlingPayment] = useState(false);
   const [settleError, setSettleError] = useState('');
   const [settleForm, setSettleForm] = useState({
+    from_user_id: null,
     to_user_id: '',
     amount: '',
     date: new Date().toISOString().split('T')[0],
@@ -474,6 +477,7 @@ const GroupDetails = () => {
       const expensesData = expensesRes.data;
       setExpenses(Array.isArray(expensesData) ? expensesData : (expensesData.expenses || expensesData.data || []));
       setBalances(balancesRes.data.balances || []);
+      setSuggestedSettlements(balancesRes.data.suggested_settlements || []);
       const settlementsData = settlementsRes.data;
       setSettlements(Array.isArray(settlementsData) ? settlementsData : (settlementsData.settlements || settlementsData.data || []));
     } catch (error) {
@@ -1035,7 +1039,7 @@ const GroupDetails = () => {
       setAddMemberError('');
       setAddMemberSuccess('');
 
-      const response = await groupMembersApi.add(id, normalizedEmail);
+      const response = await groupMembersApi.add(id, normalizedEmail, memberGuestName.trim() || undefined);
       const member = response.data?.member;
 
       if (member?.id) {
@@ -1053,6 +1057,7 @@ const GroupDetails = () => {
       }
 
       setMemberEmailInput('');
+      setMemberGuestName('');
       setSelectedSuggestedFriend(null);
       setAddMemberSuccess(member?.name ? `${member.name} added to the group` : 'Member added successfully');
       setFriendSuggestions([]);
@@ -1299,8 +1304,46 @@ const GroupDetails = () => {
     }
   };
 
+  // Compute how much a guest owes each payer, based on their expense split amounts.
+  // Returns Map<payerId, amount>.
+  const computeGuestPairwiseOwes = (guestUserId) => {
+    const owes = new Map();
+    expenses.forEach(expense => {
+      const guestSplit = expense.expense_splits?.find(
+        s => (s.user?.id || s.user_id) === guestUserId
+      );
+      if (!guestSplit) return;
+      const payerId = expense.paid_by?.id;
+      if (!payerId || payerId === guestUserId) return;
+      const splitAmount = parseFloat(guestSplit.amount || 0);
+      if (splitAmount <= 0) return;
+      owes.set(payerId, (owes.get(payerId) || 0) + splitAmount);
+    });
+    return owes;
+  };
+
+  const openSettleForGuestModal = (guestBalanceEntry) => {
+    if (isArchived) return;
+
+    // Use backend's suggested settlement for this guest
+    const guestSuggested = suggestedSettlements.filter(s => s.from.id === guestBalanceEntry.user.id);
+    const first = guestSuggested[0];
+
+    setSettleError('');
+    setUpiPaymentFired(false);
+    setSettleForm({
+      from_user_id: guestBalanceEntry.user.id,
+      to_user_id: first?.to.id || '',
+      amount: first ? first.amount.toFixed(2) : '',
+      date: new Date().toISOString().split('T')[0],
+      note: ''
+    });
+    setShowSettleModal(true);
+  };
+
   const renderBalanceCard = (balanceData) => {
     const isCurrentUser = balanceData.user.id === user.id;
+    const isGuest = balanceData.user.is_guest;
     const amount = balanceData.balance;
     const formattedAmount = Math.abs(amount).toFixed(2);
     const currencySym = group?.currency === 'INR' ? '₹' : (group?.currency === 'USD' ? '$' : '€');
@@ -1325,12 +1368,16 @@ const GroupDetails = () => {
             {balanceData.user.name.charAt(0)}
           </div>
           <div>
-            <div style={{ fontWeight: 600 }}>{isCurrentUser ? 'You' : balanceData.user.name}</div>
+            <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              {isCurrentUser ? 'You' : balanceData.user.name}
+              {isGuest && <span className="guest-badge">Guest</span>}
+            </div>
             <div style={{ fontSize: '0.85rem' }} className={statusClass}>
               {statusText}
             </div>
           </div>
         </div>
+        {/* Current user owes — show Settle button */}
         {amount < -0.01 && isCurrentUser && group?.status !== 'archived' && !group?.archived_at && (
           <button
             className="btn btn-secondary"
@@ -1340,6 +1387,17 @@ const GroupDetails = () => {
             title={settlementCandidates.length === 0 ? 'No members are currently owed money' : 'Settle up'}
           >
             Settle
+          </button>
+        )}
+        {/* Guest owes money — admin can settle for them */}
+        {amount < -0.01 && !isCurrentUser && isGuest && isAdmin && !isArchived && (
+          <button
+            className="btn btn-secondary guest-settle-btn"
+            style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
+            onClick={() => openSettleForGuestModal(balanceData)}
+            title={`Settle on behalf of ${balanceData.user.name}`}
+          >
+            Settle for them
           </button>
         )}
       </div>
@@ -1353,6 +1411,7 @@ const GroupDetails = () => {
   const totalGroupExpense = expenses.reduce((sum, expense) => sum + (parseFloat(expense.amount) || 0), 0);
   const isArchived = group.status === 'archived' || Boolean(group.archived_at);
   const isGroupOwner = group.created_by_id === user.id;
+  const isAdmin = isGroupOwner || group.members?.find(m => m.id === user.id)?.role === 'admin';
   const canManageMembers = isGroupOwner && !isArchived;
   const canManageGroupSettings = group.can_update || group.can_restore || group.can_delete || isGroupOwner;
   const canEditGroupDetails = Boolean(group.can_update);
@@ -1405,26 +1464,35 @@ const GroupDetails = () => {
     .filter((entry) => entry.user.id !== user.id && parseFloat(entry.balance || 0) > 0.01)
     .sort((a, b) => parseFloat(b.balance || 0) - parseFloat(a.balance || 0));
 
+  // Amount the current user can pay to a specific recipient, from backend's suggested list.
   const maxPayableToUser = (recipientId) => {
-    const recipient = settlementCandidates.find((entry) => entry.user.id === recipientId);
-    if (!recipient) return 0;
+    const s = suggestedSettlements.find(
+      s => s.from.id === user.id && s.to.id === recipientId
+    );
+    return s ? s.amount : 0;
+  };
 
-    const recipientOwed = Math.max(0, parseFloat(recipient.balance || 0));
-    return Math.max(0, Math.min(currentUserDebt, recipientOwed));
+  // Amount a guest can pay to a specific recipient, from backend's suggested list.
+  const maxGuestPayableToUser = (guestId, recipientId) => {
+    const s = suggestedSettlements.find(
+      s => s.from.id === guestId && s.to.id === recipientId
+    );
+    return s ? s.amount : 0;
   };
 
   const openSettleModal = () => {
     if (isArchived) return;
-    if (currentUserDebt <= 0 || settlementCandidates.length === 0) return;
+    // Use the backend's first suggested settlement for the current user
+    const mySuggested = suggestedSettlements.filter(s => s.from.id === user.id);
+    if (mySuggested.length === 0) return;
 
-    const defaultRecipientId = settlementCandidates[0].user.id;
-    const defaultMax = maxPayableToUser(defaultRecipientId);
-
+    const first = mySuggested[0];
     setSettleError('');
     setUpiPaymentFired(false);
     setSettleForm({
-      to_user_id: defaultRecipientId,
-      amount: defaultMax > 0 ? defaultMax.toFixed(2) : '',
+      from_user_id: null,
+      to_user_id: first.to.id,
+      amount: first.amount.toFixed(2),
       date: new Date().toISOString().split('T')[0],
       note: ''
     });
@@ -1432,18 +1500,15 @@ const GroupDetails = () => {
   };
 
   const updateSettleRecipient = (recipientId) => {
-    const nextMax = maxPayableToUser(recipientId);
+    const nextMax = settleForm.from_user_id
+      ? maxGuestPayableToUser(settleForm.from_user_id, recipientId)
+      : maxPayableToUser(recipientId);
     setUpiPaymentFired(false);
-
-    setSettleForm((prev) => {
-      const currentAmount = parseFloat(prev.amount || 0);
-      const nextAmount =
-        currentAmount > 0 && currentAmount <= nextMax
-          ? currentAmount.toFixed(2)
-          : (nextMax > 0 ? nextMax.toFixed(2) : '');
-
-      return { ...prev, to_user_id: recipientId, amount: nextAmount };
-    });
+    setSettleForm((prev) => ({
+      ...prev,
+      to_user_id: recipientId,
+      amount: nextMax > 0 ? nextMax.toFixed(2) : ''
+    }));
   };
 
   const buildUpiLink = (recipientUpiId, amount, note, recipientName) => {
@@ -1474,8 +1539,14 @@ const GroupDetails = () => {
   const handleSettlePayment = async (e) => {
     e.preventDefault();
     const recipientId = settleForm.to_user_id;
+    const fromUserId = settleForm.from_user_id || null; // null = current user
     const amount = parseFloat(settleForm.amount || 0);
-    const maxAmount = maxPayableToUser(recipientId);
+    // Max comes from the backend's suggested settlement list — no frontend math needed.
+    const payerIdForMax = fromUserId || user.id;
+    const maxSuggestion = suggestedSettlements.find(
+      s => s.from.id === payerIdForMax && s.to.id === recipientId
+    );
+    const maxAmount = maxSuggestion ? maxSuggestion.amount : 0;
 
     if (!recipientId) {
       setSettleError('Please choose a member to settle with');
@@ -1502,6 +1573,7 @@ const GroupDetails = () => {
       await api.post(`/groups/${id}/settlements`, {
         settlement: {
           to_user_id: recipientId,
+          ...(fromUserId ? { from_user_id: fromUserId } : {}),
           amount: amount.toFixed(2),
           date: settleForm.date,
           note: settleForm.note
@@ -1998,6 +2070,7 @@ const GroupDetails = () => {
                   <div className="group-member-person">
                     <div className="group-member-avatar">{member.name.charAt(0)}</div>
                     <span>{member.id === user.id ? 'You' : member.name}</span>
+                    {member.is_guest && <span className="guest-badge">Guest</span>}
                   </div>
                   {member.can_remove && (
                     <button
@@ -2375,7 +2448,7 @@ const GroupDetails = () => {
                     setSelectedSuggestedFriend(null);
                     setAddMemberError('');
                   }}
-                  placeholder="Type a name (e.g., Test)"
+                  placeholder="Email or name to search"
                   autoComplete="new-password"
                   autoCorrect="off"
                   autoCapitalize="none"
@@ -2396,10 +2469,32 @@ const GroupDetails = () => {
                   }}
                   disabled={addingMember}
                 />
+                <input
+                  type="text"
+                  name="guest_display_name"
+                  value={memberGuestName}
+                  onChange={(e) => setMemberGuestName(e.target.value)}
+                  placeholder="Display name (required for new users)"
+                  autoComplete="off"
+                  data-lpignore="true"
+                  style={{
+                    flex: 1,
+                    minWidth: '200px',
+                    background: 'rgba(15, 23, 42, 0.4)',
+                    border: '1px solid var(--surface-border)',
+                    borderRadius: '10px',
+                    padding: '0.62rem 0.78rem',
+                    color: 'var(--text-primary)'
+                  }}
+                  disabled={addingMember}
+                />
                 <button type="submit" className="btn btn-primary" disabled={addingMember}>
                   {addingMember ? 'Adding...' : 'Add Member'}
                 </button>
               </form>
+              <p style={{ marginTop: '0.5rem', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
+                If the email has no TripSplit account, they’ll be added as a guest (display name required).
+              </p>
 
               {selectedSuggestedFriend && (
                 <div style={{ marginTop: '0.55rem', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
@@ -2641,12 +2736,43 @@ const GroupDetails = () => {
       )}
 
       {showSettleModal && (() => {
-        const settleRecipient = settlementCandidates.find((e) => e.user.id === settleForm.to_user_id);
+      const isProxySettle = !!settleForm.from_user_id;
+        const guestEntry = isProxySettle ? balances.find(b => b.user.id === settleForm.from_user_id) : null;
+        const guestDebt = guestEntry ? Math.max(0, -(parseFloat(guestEntry.balance || 0))) : 0;
+        const guestName = guestEntry ? group.members?.find(m => m.id === settleForm.from_user_id)?.name : null;
+
+        // Derive recipient candidates from the backend's suggested settlement list.
+        // Proxy: payments where guest is the payer. Normal: payments where current user is the payer.
+        const payerId = isProxySettle ? settleForm.from_user_id : user.id;
+        const relevantSuggestions = suggestedSettlements.filter(s => s.from.id === payerId);
+
+        // Build a map: recipientId → suggested amount (from backend)
+        const suggestedAmountMap = new Map(relevantSuggestions.map(s => [s.to.id, s.amount]));
+
+        // Cross-reference with balances for UPI ID + name lookup
+        const activeRecipientCandidates = relevantSuggestions.map(s => {
+          const balEntry = balances.find(b => b.user.id === s.to.id);
+          return balEntry ?? { user: s.to, balance: 0 };
+        });
+
+        const activeRecipientOptions = activeRecipientCandidates.map(entry => {
+          const name = entry.user.id === user.id ? 'You' : entry.user.name;
+          const suggestedAmt = suggestedAmountMap.get(entry.user.id) ?? 0;
+          if (isProxySettle) {
+            return { value: entry.user.id, label: `${name} (${currencySym}${suggestedAmt.toFixed(2)})` };
+          }
+          return { value: entry.user.id, label: `${name} (${currencySym}${suggestedAmt.toFixed(2)})` };
+        });
+
+        // Max for the chosen recipient comes directly from the backend suggestion.
+        const activeSettleRecipientMaxAmount = suggestedAmountMap.get(settleForm.to_user_id) ?? 0;
+
+        const settleRecipient = activeRecipientCandidates.find((e) => e.user.id === settleForm.to_user_id);
         const recipientUpiId = settleRecipient?.user?.upi_id || null;
         const isInr = group.currency === 'INR';
-        const canUseUpi = isInr && !!recipientUpiId;
+        const canUseUpi = !isProxySettle && isInr && !!recipientUpiId;
         const amountNum = parseFloat(settleForm.amount || 0);
-        const amountValid = amountNum > 0 && amountNum <= settleRecipientMaxAmount + 0.001;
+        const amountValid = amountNum > 0 && amountNum <= activeSettleRecipientMaxAmount + 0.001;
 
         return (
           <div className="modal-overlay">
@@ -2655,12 +2781,34 @@ const GroupDetails = () => {
               {/* ── Header ── */}
               <div className="settle-modal-header">
                 <div>
-                  <h3 className="settle-modal-title">Settle Up</h3>
-                  <p className="settle-modal-subtitle">Record a payment to clear your balance</p>
+                  {settleForm.from_user_id ? (
+                    <>
+                      <h3 className="settle-modal-title">Settle for Guest</h3>
+                      <p className="settle-modal-subtitle">
+                        <strong>{guestName}</strong> owes {currencySym}{guestDebt.toFixed(2)} total — choose who received the cash
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <h3 className="settle-modal-title">Settle Up</h3>
+                      <p className="settle-modal-subtitle">
+                        You owe {currencySym}{currentUserDebt.toFixed(2)} — choose who you paid. One payment clears your balance.
+                      </p>
+                    </>
+                  )}
                 </div>
                 <div className="settle-modal-debt-pill">
-                  <span className="settle-modal-debt-label">You owe</span>
-                  <span className="settle-modal-debt-amount">{currencySym}{currentUserDebt.toFixed(2)}</span>
+                  {isProxySettle ? (
+                    <>
+                      <span className="settle-modal-debt-label">{guestName} owes</span>
+                      <span className="settle-modal-debt-amount">{currencySym}{guestDebt.toFixed(2)}</span>
+                    </>
+                  ) : (
+                    <>
+                      <span className="settle-modal-debt-label">You owe</span>
+                      <span className="settle-modal-debt-amount">{currencySym}{currentUserDebt.toFixed(2)}</span>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -2673,7 +2821,7 @@ const GroupDetails = () => {
                   <label>Pay To</label>
                   <CustomSelect
                     value={settleForm.to_user_id}
-                    options={settlementRecipientOptions}
+                    options={activeRecipientOptions}
                     onChange={(nextValue) => updateSettleRecipient(nextValue)}
                     disabled={upiPaymentFired}
                   />
@@ -2693,7 +2841,7 @@ const GroupDetails = () => {
                       onChange={(e) => setSettleForm((prev) => ({ ...prev, amount: e.target.value }))}
                     />
                     <span className="settle-max-hint">
-                      Max {currencySym}{settleRecipientMaxAmount.toFixed(2)}
+                      Max {currencySym}{activeSettleRecipientMaxAmount.toFixed(2)}
                     </span>
                   </div>
                   <div className="form-group settle-form-group" style={{ flex: 1 }}>
@@ -2741,8 +2889,8 @@ const GroupDetails = () => {
                   </div>
                 )}
 
-                {/* No-UPI fallback */}
-                {!canUseUpi && settleRecipient && (
+                {/* No-UPI fallback — only for normal settle, not proxy (guest) */}
+                {!isProxySettle && !canUseUpi && settleRecipient && (
                   <div className="upi-fallback-block">
                     <span style={{ fontSize: '1rem' }}>ℹ️</span>
                     <span>
