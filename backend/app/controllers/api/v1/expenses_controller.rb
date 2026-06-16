@@ -257,9 +257,9 @@ module Api
         json = expense.as_json(
           only: %i[id description amount currency split_type date category created_at updated_at],
           include: {
-            paid_by: { only: %i[id name avatar_url] },
-            created_by: { only: %i[id name avatar_url] },
-            expense_splits: { include: { user: { only: %i[id name avatar_url] } } }
+            paid_by: { only: %i[id name avatar_url is_guest] },
+            created_by: { only: %i[id name avatar_url is_guest] },
+            expense_splits: { include: { user: { only: %i[id name avatar_url is_guest] } } }
           }
         )
         json.merge!(receipt_data(expense))

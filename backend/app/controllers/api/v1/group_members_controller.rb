@@ -45,8 +45,28 @@ module Api
       end
 
       def create
-        user = User.find_by(email: member_params[:email].to_s.strip.downcase)
-        return render json: { error: 'User not found' }, status: :not_found unless user
+        email = member_params[:email].to_s.strip.downcase
+        user = User.find_by(email: email)
+
+        if user.nil?
+          # Create a guest user — only admins/owners reach this (ensure_owner! runs first)
+          display_name = member_params[:name].to_s.strip
+          if display_name.blank?
+            return render json: { error: 'Display name is required when adding a guest member' },
+                          status: :unprocessable_entity
+          end
+
+          user = User.new(
+            email: email,
+            name: display_name,
+            is_guest: true,
+            password: SecureRandom.hex(32)
+          )
+
+          unless user.save
+            return render json: { errors: user.errors.full_messages }, status: :unprocessable_entity
+          end
+        end
 
         membership = @group.group_memberships.find_or_initialize_by(user: user)
         if membership.persisted?
@@ -56,15 +76,16 @@ module Api
         membership.role = 'member'
 
         if membership.save
-          notify_member_added(user)
+          notify_member_added(user) unless user.is_guest?
 
           render json: {
-            message: 'Member added successfully',
+            message: user.is_guest? ? 'Guest member added successfully' : 'Member added successfully',
             member: {
               id: user.id,
               name: user.name,
               email: user.email,
               avatar_url: user.avatar_url,
+              is_guest: user.is_guest?,
               can_remove: member_removable?(user.id)
             }
           }, status: :created
@@ -149,7 +170,7 @@ module Api
       end
 
       def member_params
-        params.require(:member).permit(:email)
+        params.require(:member).permit(:email, :name)
       end
 
       def suggestions_params

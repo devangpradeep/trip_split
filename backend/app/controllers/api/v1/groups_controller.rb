@@ -145,6 +145,7 @@ module Api
           name: member.name,
           email: member.email,
           avatar_url: member.avatar_url,
+          is_guest: member.is_guest?,
           can_remove: member_removable?(group, member)
         }
       end
