@@ -1304,24 +1304,6 @@ const GroupDetails = () => {
     }
   };
 
-  // Compute how much a guest owes each payer, based on their expense split amounts.
-  // Returns Map<payerId, amount>.
-  const computeGuestPairwiseOwes = (guestUserId) => {
-    const owes = new Map();
-    expenses.forEach(expense => {
-      const guestSplit = expense.expense_splits?.find(
-        s => (s.user?.id || s.user_id) === guestUserId
-      );
-      if (!guestSplit) return;
-      const payerId = expense.paid_by?.id;
-      if (!payerId || payerId === guestUserId) return;
-      const splitAmount = parseFloat(guestSplit.amount || 0);
-      if (splitAmount <= 0) return;
-      owes.set(payerId, (owes.get(payerId) || 0) + splitAmount);
-    });
-    return owes;
-  };
-
   const openSettleForGuestModal = (guestBalanceEntry) => {
     if (isArchived) return;
 
@@ -1523,16 +1505,20 @@ const GroupDetails = () => {
   };
 
   const handleOpenUpiApp = () => {
-    const recipient = settlementCandidates.find((e) => e.user.id === settleForm.to_user_id);
-    if (!recipient?.user?.upi_id) return;
+    // Find recipient from the backend's suggested settlements (has UPI ID)
+    const suggestion = suggestedSettlements.find(s =>
+      s.from.id === user.id && s.to.id === settleForm.to_user_id
+    );
+    const recipientUpiId = suggestion?.to?.upi_id;
+    const recipientName = suggestion?.to?.name;
+    if (!recipientUpiId) return;
     const link = buildUpiLink(
-      recipient.user.upi_id,
+      recipientUpiId,
       settleForm.amount,
       settleForm.note,
-      recipient.user.name
+      recipientName
     );
     window.location.href = link;
-    // Give the OS a moment to intercept; then reveal the confirm step
     setTimeout(() => setUpiPaymentFired(true), 1200);
   };
 
@@ -1592,16 +1578,11 @@ const GroupDetails = () => {
     }
   };
 
-  const settleRecipientMaxAmount = settleForm.to_user_id ? maxPayableToUser(settleForm.to_user_id) : 0;
   const splitTypeOptions = [
     { value: 'equal', label: 'Equal' },
     { value: 'amount', label: 'Amount' },
     { value: 'percentage', label: 'Percentage' }
   ];
-  const settlementRecipientOptions = settlementCandidates.map((entry) => ({
-    value: entry.user.id,
-    label: `${entry.user.name} (owed ${currencySym}${Math.max(0, parseFloat(entry.balance || 0)).toFixed(2)})`
-  }));
   const includedAddSplits = expenseForm.splits.filter((split) => split.included);
   const addEnteredSplitTotal = includedAddSplits.reduce((sum, split) => {
     if (expenseForm.split_type === 'percentage') {
