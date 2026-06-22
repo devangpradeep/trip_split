@@ -1826,6 +1826,11 @@ body.app-installed {
 .create-group-name-field,
 .create-group-currency-field {
   min-width: 0;
+  align-self: start;
+}
+
+.create-group-name-error {
+  margin: 0.35rem 0 0;
 }
 
 .create-group-description-field {
