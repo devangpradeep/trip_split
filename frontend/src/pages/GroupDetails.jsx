@@ -384,6 +384,7 @@ const GroupDetails = () => {
   const [expenses, setExpenses] = useState([]);
   const [balances, setBalances] = useState([]);
   const [suggestedSettlements, setSuggestedSettlements] = useState([]);
+  const [guestSettlementSuggestions, setGuestSettlementSuggestions] = useState([]);
   const [invites, setInvites] = useState([]);
   const [latestExpiredInvite, setLatestExpiredInvite] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -478,6 +479,7 @@ const GroupDetails = () => {
       setExpenses(Array.isArray(expensesData) ? expensesData : (expensesData.expenses || expensesData.data || []));
       setBalances(balancesRes.data.balances || []);
       setSuggestedSettlements(balancesRes.data.suggested_settlements || []);
+      setGuestSettlementSuggestions(balancesRes.data.guest_settlement_suggestions || []);
       const settlementsData = settlementsRes.data;
       setSettlements(Array.isArray(settlementsData) ? settlementsData : (settlementsData.settlements || settlementsData.data || []));
     } catch (error) {
@@ -1308,7 +1310,7 @@ const GroupDetails = () => {
     if (isArchived) return;
 
     // Use backend's suggested settlement for this guest
-    const guestSuggested = suggestedSettlements.filter(s => s.from.id === guestBalanceEntry.user.id);
+    const guestSuggested = guestSettlementSuggestions.filter(s => s.from.id === guestBalanceEntry.user.id);
     const first = guestSuggested[0];
 
     setSettleError('');
@@ -1456,7 +1458,7 @@ const GroupDetails = () => {
 
   // Amount a guest can pay to a specific recipient, from backend's suggested list.
   const maxGuestPayableToUser = (guestId, recipientId) => {
-    const s = suggestedSettlements.find(
+    const s = guestSettlementSuggestions.find(
       s => s.from.id === guestId && s.to.id === recipientId
     );
     return s ? s.amount : 0;
@@ -1529,7 +1531,8 @@ const GroupDetails = () => {
     const amount = parseFloat(settleForm.amount || 0);
     // Max comes from the backend's suggested settlement list — no frontend math needed.
     const payerIdForMax = fromUserId || user.id;
-    const maxSuggestion = suggestedSettlements.find(
+    const availableSuggestions = fromUserId ? guestSettlementSuggestions : suggestedSettlements;
+    const maxSuggestion = availableSuggestions.find(
       s => s.from.id === payerIdForMax && s.to.id === recipientId
     );
     const maxAmount = maxSuggestion ? maxSuggestion.amount : 0;
@@ -2725,7 +2728,8 @@ const GroupDetails = () => {
         // Derive recipient candidates from the backend's suggested settlement list.
         // Proxy: payments where guest is the payer. Normal: payments where current user is the payer.
         const payerId = isProxySettle ? settleForm.from_user_id : user.id;
-        const relevantSuggestions = suggestedSettlements.filter(s => s.from.id === payerId);
+        const availableSuggestions = isProxySettle ? guestSettlementSuggestions : suggestedSettlements;
+        const relevantSuggestions = availableSuggestions.filter(s => s.from.id === payerId);
 
         // Build a map: recipientId → suggested amount (from backend)
         const suggestedAmountMap = new Map(relevantSuggestions.map(s => [s.to.id, s.amount]));
