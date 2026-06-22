@@ -15,7 +15,9 @@ module Api
       before_action :ensure_can_delete_expense!, only: %i[destroy]
 
       def index
-        @expenses = @group.expenses.includes(:paid_by, :created_by, receipt_attachment: :blob, expense_splits: :user).order(date: :desc)
+        @expenses = @group.expenses
+                          .includes(:paid_by, :created_by, receipt_attachment: :blob, expense_splits: :user)
+                          .order(date: :desc, created_at: :desc)
         render json: @expenses.map { |expense| expense_json(expense) }
       end
 

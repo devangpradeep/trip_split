@@ -403,6 +403,7 @@ const GroupDetails = () => {
   const [deleteGroupConfirmInput, setDeleteGroupConfirmInput] = useState('');
   
   const [showAddExpense, setShowAddExpense] = useState(false);
+  const [creatingExpense, setCreatingExpense] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteExpiresHours, setInviteExpiresHours] = useState('48');
   const [inviteNoExpiry, setInviteNoExpiry] = useState(false);
@@ -459,6 +460,7 @@ const GroupDetails = () => {
   const [receiptLightbox, setReceiptLightbox] = useState(null);
   const receiptInputRef = useRef(null);
   const editReceiptInputRef = useRef(null);
+  const expenseCreationInFlightRef = useRef(false);
   const [settlements, setSettlements] = useState([]);
   const [showSettlementHistory, setShowSettlementHistory] = useState(false);
   const groupDataFetchInFlightRef = useRef(false);
@@ -558,6 +560,7 @@ const GroupDetails = () => {
 
   const handleAddExpense = async (e) => {
     e.preventDefault();
+    if (expenseCreationInFlightRef.current) return;
     if (!expenseForm.amount || !expenseForm.description) return;
     if (!isValidISODate(expenseForm.date)) {
       setAddExpenseError('Please enter a valid date in DD/MM/YYYY format');
@@ -605,6 +608,8 @@ const GroupDetails = () => {
     }
 
     try {
+      expenseCreationInFlightRef.current = true;
+      setCreatingExpense(true);
       setAddExpenseError('');
 
       const expenseData = {
@@ -621,7 +626,7 @@ const GroupDetails = () => {
         const formData = new FormData();
         Object.entries(expenseData).forEach(([key, value]) => {
           if (key === 'splits') {
-            value.forEach((split, i) => {
+            value.forEach((split) => {
               Object.entries(split).forEach(([sk, sv]) => {
                 formData.append(`expense[splits][][${sk}]`, sv);
               });
@@ -646,6 +651,9 @@ const GroupDetails = () => {
       const serverError = error.response?.data?.errors?.join(', ');
       const fallbackError = error.response?.data?.error;
       setAddExpenseError(serverError || fallbackError || 'Failed to add expense');
+    } finally {
+      expenseCreationInFlightRef.current = false;
+      setCreatingExpense(false);
     }
   };
 
@@ -1246,7 +1254,7 @@ const GroupDetails = () => {
         const formData = new FormData();
         Object.entries(expenseData).forEach(([key, value]) => {
           if (key === 'splits') {
-            value.forEach((split, i) => {
+            value.forEach((split) => {
               Object.entries(split).forEach(([sk, sv]) => {
                 formData.append(`expense[splits][][${sk}]`, sv);
               });
@@ -1833,7 +1841,14 @@ const GroupDetails = () => {
                 </div>
 
                 <div className="flex gap-3" style={{ marginTop: '0.5rem' }}>
-                  <button type="submit" className="btn btn-primary" style={{ flex: 1 }}>Save</button>
+                  <button
+                    type="submit"
+                    className="btn btn-primary"
+                    style={{ flex: 1 }}
+                    disabled={creatingExpense}
+                  >
+                    {creatingExpense ? 'Saving...' : 'Save'}
+                  </button>
                   <button
                     type="button"
                     className="btn btn-secondary"
@@ -1842,6 +1857,7 @@ const GroupDetails = () => {
                       setAddExpenseError('');
                       setReceiptFile(null);
                     }}
+                    disabled={creatingExpense}
                   >
                     Cancel
                   </button>

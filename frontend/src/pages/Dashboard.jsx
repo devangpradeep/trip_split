@@ -114,6 +114,8 @@ const Dashboard = () => {
   const [newGroupFriendQuery, setNewGroupFriendQuery] = useState('');
   const [selectedNewGroupFriends, setSelectedNewGroupFriends] = useState([]);
   const [creatingGroup, setCreatingGroup] = useState(false);
+  const groupCreationInFlightRef = useRef(false);
+  const [groupNameError, setGroupNameError] = useState('');
   const [createGroupError, setCreateGroupError] = useState('');
   const [groupSearchQuery, setGroupSearchQuery] = useState('');
   const [archivedGroupsCollapsed, setArchivedGroupsCollapsed] = useState(() => (
@@ -199,14 +201,22 @@ const Dashboard = () => {
 
   const handleCreateGroup = async (e) => {
     e.preventDefault();
-    if (!newGroupName.trim()) return;
+    if (groupCreationInFlightRef.current) return;
+
+    const groupName = newGroupName.trim();
+    if (!groupName) {
+      setGroupNameError('Group name is required');
+      return;
+    }
 
     try {
+      groupCreationInFlightRef.current = true;
       setCreatingGroup(true);
+      setGroupNameError('');
       setCreateGroupError('');
       const response = await api.post('/groups', {
         group: {
-          name: newGroupName,
+          name: groupName,
           description: newGroupDescription.trim(),
           currency: newGroupCurrency
         }
@@ -244,6 +254,7 @@ const Dashboard = () => {
       const serverError = error.response?.data?.errors?.join(', ') || error.response?.data?.error;
       setCreateGroupError(serverError || 'Failed to create group');
     } finally {
+      groupCreationInFlightRef.current = false;
       setCreatingGroup(false);
     }
   };
@@ -411,12 +422,27 @@ const Dashboard = () => {
           >
             <div className="form-group create-group-name-field" style={{ margin: 0 }}>
               <input 
-                type="text" 
+                type="text"
+                required
                 placeholder="Group Name (e.g., Goa Trip)" 
                 value={newGroupName}
-                onChange={(e) => setNewGroupName(e.target.value)}
+                onChange={(e) => {
+                  setNewGroupName(e.target.value);
+                  if (groupNameError) setGroupNameError('');
+                }}
+                onInvalid={(e) => {
+                  e.preventDefault();
+                  setGroupNameError('Group name is required');
+                }}
+                aria-invalid={Boolean(groupNameError)}
+                aria-describedby={groupNameError ? 'create-group-name-error' : undefined}
                 autoFocus
               />
+              {groupNameError && (
+                <div id="create-group-name-error" className="error-text create-group-name-error">
+                  {groupNameError}
+                </div>
+              )}
             </div>
             <div className="form-group create-group-currency-field" style={{ margin: 0 }}>
               <DashboardCustomSelect
@@ -486,26 +512,6 @@ const Dashboard = () => {
                 </div>
               )}
             </div>
-            <div className="create-group-actions">
-              <button type="submit" className="btn btn-primary create-group-submit-btn" disabled={creatingGroup}>
-                {creatingGroup ? 'Creating...' : 'Create'}
-              </button>
-              <button
-                type="button"
-                className="btn btn-secondary create-group-cancel-btn"
-                onClick={() => {
-                  if (creatingGroup) return;
-                  setShowAddGroup(false);
-                  setCreateGroupError('');
-                  setNewGroupDescription('');
-                  setNewGroupFriendQuery('');
-                  setSelectedNewGroupFriends([]);
-                }}
-                disabled={creatingGroup}
-              >
-                Cancel
-              </button>
-            </div>
             {selectedNewGroupFriends.length > 0 && (
               <div className="create-group-selected-friends">
                 {selectedNewGroupFriends.map((friend) => (
@@ -528,6 +534,27 @@ const Dashboard = () => {
             {createGroupError && (
               <div className="error-text create-group-error-text">{createGroupError}</div>
             )}
+            <div className="create-group-actions">
+              <button type="submit" className="btn btn-primary create-group-submit-btn" disabled={creatingGroup}>
+                {creatingGroup ? 'Creating...' : 'Create'}
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary create-group-cancel-btn"
+                onClick={() => {
+                  if (creatingGroup) return;
+                  setShowAddGroup(false);
+                  setGroupNameError('');
+                  setCreateGroupError('');
+                  setNewGroupDescription('');
+                  setNewGroupFriendQuery('');
+                  setSelectedNewGroupFriends([]);
+                }}
+                disabled={creatingGroup}
+              >
+                Cancel
+              </button>
+            </div>
           </form>
         </div>
       )}
