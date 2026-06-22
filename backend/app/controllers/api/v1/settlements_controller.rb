@@ -23,7 +23,11 @@ module Api
         from_user = resolve_from_user!
         to_user = find_settlement_recipient!(from_user)
         amount = settlement_amount!
-        max_payable = max_payable_to(to_user.id, from_user.id)
+        max_payable = if proxy_settlement?
+                        max_pairwise_payable_to(to_user.id, from_user.id)
+                      else
+                        max_payable_to(to_user.id, from_user.id)
+                      end
         raise SettlementValidationError, 'No payable balance found for this member' if max_payable <= 0
 
         if amount > max_payable
@@ -130,6 +134,18 @@ module Api
         payer_owes = [-(balances[from_user_id] || 0), 0].max
         recipient_is_owed = [balances[recipient_id] || 0, 0].max
         [payer_owes, recipient_is_owed].min
+      end
+
+      def max_pairwise_payable_to(recipient_id, from_user_id)
+        settlement = Balances::PairwiseSettlementCalculator.new(@group).call.find do |candidate|
+          candidate[:from_user_id] == from_user_id && candidate[:to_user_id] == recipient_id
+        end
+
+        settlement&.fetch(:amount, 0) || 0
+      end
+
+      def proxy_settlement?
+        settlement_params[:from_user_id].present?
       end
 
       def current_group_balances
