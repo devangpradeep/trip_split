@@ -462,6 +462,7 @@ const GroupDetails = () => {
   const editReceiptInputRef = useRef(null);
   const [settlements, setSettlements] = useState([]);
   const [showSettlementHistory, setShowSettlementHistory] = useState(false);
+  const [expandedBalanceId, setExpandedBalanceId] = useState(null);
   const groupDataFetchInFlightRef = useRef(false);
 
   const fetchGroupData = useCallback(async () => {
@@ -1332,6 +1333,7 @@ const GroupDetails = () => {
   const renderBalanceCard = (balanceData) => {
     const isCurrentUser = balanceData.user.id === user.id;
     const isGuest = balanceData.user.is_guest;
+    const netBalance = parseFloat(balanceData.balance || 0);
     const currencySym = group?.currency === 'INR' ? '₹' : (group?.currency === 'USD' ? '$' : '€');
     const outgoingSuggestions = (isGuest ? guestSettlementSuggestions : suggestedSettlements)
       .filter((settlement) => settlement.from.id === balanceData.user.id);
@@ -1339,66 +1341,121 @@ const GroupDetails = () => {
       .filter((settlement) => settlement.to.id === balanceData.user.id);
     const outgoingTotal = outgoingSuggestions.reduce((sum, settlement) => sum + settlement.amount, 0);
     const incomingTotal = incomingSuggestions.reduce((sum, settlement) => sum + settlement.amount, 0);
-    
-    let statusClass = '';
-    let statusText = '';
-    
-    if (outgoingTotal > 0.01 && incomingTotal > 0.01) {
-      statusClass = 'text-secondary';
-      statusText = isCurrentUser
-        ? `You owe ${currencySym}${outgoingTotal.toFixed(2)} · you are owed ${currencySym}${incomingTotal.toFixed(2)}`
-        : `Owes ${currencySym}${outgoingTotal.toFixed(2)} · gets back ${currencySym}${incomingTotal.toFixed(2)}`;
-    } else if (incomingTotal > 0.01) {
+    const transferCount = outgoingSuggestions.length + incomingSuggestions.length;
+    const canShowBreakdown = !group.simplify_debts && transferCount > 0;
+    const isBreakdownOpen = expandedBalanceId === balanceData.user.id;
+
+    let statusClass = 'text-secondary';
+    let statusText = 'Settled up';
+
+    if (netBalance > 0.01) {
       statusClass = 'text-success';
       statusText = isCurrentUser
-        ? `You are owed ${currencySym}${incomingTotal.toFixed(2)}`
-        : `Gets back ${currencySym}${incomingTotal.toFixed(2)}`;
-    } else if (outgoingTotal > 0.01) {
+        ? `You are owed ${currencySym}${netBalance.toFixed(2)} overall`
+        : `Gets back ${currencySym}${netBalance.toFixed(2)} overall`;
+    } else if (netBalance < -0.01) {
       statusClass = 'text-danger';
       statusText = isCurrentUser
-        ? `You owe ${currencySym}${outgoingTotal.toFixed(2)}`
-        : `Owes ${currencySym}${outgoingTotal.toFixed(2)}`;
-    } else {
-      statusText = 'Settled up';
+        ? `You owe ${currencySym}${Math.abs(netBalance).toFixed(2)} overall`
+        : `Owes ${currencySym}${Math.abs(netBalance).toFixed(2)} overall`;
     }
 
     return (
-      <div key={balanceData.user.id} className="glass-panel" style={{ padding: '1rem 1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div className="flex items-center gap-3">
-          <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--primary-light)', color: 'var(--primary-color)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' }}>
-            {balanceData.user.name.charAt(0)}
+      <div
+        key={balanceData.user.id}
+        className={`glass-panel balance-card ${isBreakdownOpen ? 'expanded' : ''}`}
+      >
+        <div className="balance-card-main">
+          <div className="balance-card-person">
+            <div className="balance-card-avatar">{balanceData.user.name.charAt(0)}</div>
+            <div className="balance-card-copy">
+              <div className="balance-card-name">
+                {isCurrentUser ? 'You' : balanceData.user.name}
+                {isGuest && <span className="guest-badge">Guest</span>}
+              </div>
+              <div className={`balance-card-net ${statusClass}`}>{statusText}</div>
+              {canShowBreakdown && (
+                <button
+                  type="button"
+                  className="balance-breakdown-toggle"
+                  aria-expanded={isBreakdownOpen}
+                  aria-controls={`balance-breakdown-${balanceData.user.id}`}
+                  onClick={() => setExpandedBalanceId((currentId) => (
+                    currentId === balanceData.user.id ? null : balanceData.user.id
+                  ))}
+                >
+                  <span>{isBreakdownOpen ? 'Hide breakdown' : `View ${transferCount} direct ${transferCount === 1 ? 'balance' : 'balances'}`}</span>
+                  <ChevronDown size={14} className={isBreakdownOpen ? 'open' : ''} />
+                </button>
+              )}
+            </div>
           </div>
-          <div>
-            <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              {isCurrentUser ? 'You' : balanceData.user.name}
-              {isGuest && <span className="guest-badge">Guest</span>}
-            </div>
-            <div style={{ fontSize: '0.85rem' }} className={statusClass}>
-              {statusText}
-            </div>
+
+          <div className="balance-card-actions">
+            {outgoingTotal > 0.01 && isCurrentUser && group?.status !== 'archived' && !group?.archived_at && (
+              <button
+                className="btn btn-secondary balance-settle-btn"
+                onClick={openSettleModal}
+                title={group.simplify_debts ? 'Settle simplified balance' : 'Settle direct payments'}
+              >
+                Settle
+              </button>
+            )}
+            {outgoingTotal > 0.01 && !isCurrentUser && isGuest && isAdmin && !isArchived && (
+              <button
+                className="btn btn-secondary guest-settle-btn balance-settle-btn"
+                onClick={() => openSettleForGuestModal(balanceData)}
+                title={`Settle on behalf of ${balanceData.user.name}`}
+              >
+                Settle for them
+              </button>
+            )}
           </div>
         </div>
-        {/* Current user has a payment to make — show Settle button */}
-        {outgoingTotal > 0.01 && isCurrentUser && group?.status !== 'archived' && !group?.archived_at && (
-          <button
-            className="btn btn-secondary"
-            style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
-            onClick={openSettleModal}
-            title={group.simplify_debts ? 'Settle simplified balance' : 'Settle direct payments'}
+
+        {canShowBreakdown && isBreakdownOpen && (
+          <div
+            id={`balance-breakdown-${balanceData.user.id}`}
+            className="balance-breakdown"
           >
-            Settle
-          </button>
-        )}
-        {/* Guest has a payment to make — admin can settle for them */}
-        {outgoingTotal > 0.01 && !isCurrentUser && isGuest && isAdmin && !isArchived && (
-          <button
-            className="btn btn-secondary guest-settle-btn"
-            style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
-            onClick={() => openSettleForGuestModal(balanceData)}
-            title={`Settle on behalf of ${balanceData.user.name}`}
-          >
-            Settle for them
-          </button>
+            {outgoingSuggestions.length > 0 && (
+              <div className="balance-breakdown-group">
+                <div className="balance-breakdown-heading">
+                  <span>To pay</span>
+                  <strong>{currencySym}{outgoingTotal.toFixed(2)}</strong>
+                </div>
+                {outgoingSuggestions.map((settlement) => (
+                  <div
+                    key={`outgoing-${settlement.to.id}`}
+                    className="balance-breakdown-row outgoing"
+                  >
+                    <span className="balance-breakdown-direction">→</span>
+                    <span>{settlement.to.id === user.id ? 'You' : settlement.to.name}</span>
+                    <strong>{currencySym}{settlement.amount.toFixed(2)}</strong>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {incomingSuggestions.length > 0 && (
+              <div className="balance-breakdown-group">
+                <div className="balance-breakdown-heading">
+                  <span>To receive</span>
+                  <strong>{currencySym}{incomingTotal.toFixed(2)}</strong>
+                </div>
+                {incomingSuggestions.map((settlement) => (
+                  <div
+                    key={`incoming-${settlement.from.id}`}
+                    className="balance-breakdown-row incoming"
+                  >
+                    <span className="balance-breakdown-direction">←</span>
+                    <span>{settlement.from.id === user.id ? 'You' : settlement.from.name}</span>
+                    <strong>{currencySym}{settlement.amount.toFixed(2)}</strong>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         )}
       </div>
     );
@@ -2343,9 +2400,9 @@ const GroupDetails = () => {
                     <h4 id="settlement-mode-heading">Settlement method</h4>
                     <p>Choose how this group decides who pays whom.</p>
                   </div>
-                  <span className={`settlement-mode-state ${group.settlement_mode_locked ? 'locked' : ''}`}>
-                    {group.settlement_mode_locked ? 'Locked' : 'Admin setting'}
-                  </span>
+                  {group.settlement_mode_locked && (
+                    <span className="settlement-mode-state locked">Locked</span>
+                  )}
                 </div>
 
                 <div className="settlement-mode-options">

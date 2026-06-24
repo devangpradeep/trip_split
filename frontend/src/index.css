@@ -2250,6 +2250,186 @@ body.app-installed {
   gap: 1.5rem;
 }
 
+.balance-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.balance-card-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
+  padding: 1rem 1.15rem;
+}
+
+.balance-card-person {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.balance-card-avatar {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: var(--primary-color);
+  background: var(--primary-light);
+  font-weight: 700;
+}
+
+.balance-card-copy {
+  min-width: 0;
+}
+
+.balance-card-name {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.balance-card-net {
+  margin-top: 0.12rem;
+  font-size: 0.84rem;
+  line-height: 1.3;
+}
+
+.balance-breakdown-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-top: 0.32rem;
+  padding: 0;
+  border: 0;
+  color: #a5b4fc;
+  background: transparent;
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.balance-breakdown-toggle:hover {
+  color: #c7d2fe;
+}
+
+.balance-breakdown-toggle svg {
+  transition: transform 0.18s ease;
+}
+
+.balance-breakdown-toggle svg.open {
+  transform: rotate(180deg);
+}
+
+.balance-card-actions {
+  flex-shrink: 0;
+}
+
+.balance-settle-btn {
+  min-height: 34px;
+  padding: 0.38rem 0.7rem;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.balance-breakdown {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.85rem 1.15rem 1rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(7, 13, 31, 0.2);
+}
+
+.balance-breakdown-group {
+  min-width: 0;
+}
+
+.balance-breakdown-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.38rem;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.balance-breakdown-heading strong {
+  color: var(--text-primary);
+  font-size: 0.75rem;
+}
+
+.balance-breakdown-row {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 30px;
+  padding: 0.28rem 0.45rem;
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 0.8rem;
+}
+
+.balance-breakdown-row + .balance-breakdown-row {
+  margin-top: 0.18rem;
+}
+
+.balance-breakdown-row.outgoing {
+  background: rgba(239, 68, 68, 0.06);
+}
+
+.balance-breakdown-row.incoming {
+  background: rgba(16, 185, 129, 0.06);
+}
+
+.balance-breakdown-row.outgoing .balance-breakdown-direction,
+.balance-breakdown-row.outgoing strong {
+  color: #f87171;
+}
+
+.balance-breakdown-row.incoming .balance-breakdown-direction,
+.balance-breakdown-row.incoming strong {
+  color: #34d399;
+}
+
+.balance-breakdown-row > span:nth-child(2) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.balance-breakdown-row strong {
+  white-space: nowrap;
+}
+
+@media (max-width: 560px) {
+  .balance-card-main {
+    align-items: flex-start;
+    padding: 0.9rem;
+  }
+
+  .balance-card-avatar {
+    width: 36px;
+    height: 36px;
+  }
+
+  .balance-breakdown {
+    padding: 0.8rem 0.9rem 0.9rem;
+  }
+}
+
 .expense-shares-panel {
   margin-top: 1.25rem;
   padding: 1rem 1.5rem;
@@ -2779,7 +2959,7 @@ body.app-installed {
 
 .settlement-mode-setting {
   min-width: 0;
-  margin: 0;
+  margin: 0.75rem 0 0;
   padding: 1rem;
   border: 1px solid rgba(112, 127, 255, 0.28);
   border-radius: 14px;
