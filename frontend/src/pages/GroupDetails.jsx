@@ -392,7 +392,8 @@ const GroupDetails = () => {
   const [groupSettingsForm, setGroupSettingsForm] = useState({
     name: '',
     description: '',
-    currency: 'INR'
+    currency: 'INR',
+    simplify_debts: false
   });
   const [groupSettingsError, setGroupSettingsError] = useState('');
   const [groupSettingsSuccess, setGroupSettingsSuccess] = useState('');
@@ -621,7 +622,7 @@ const GroupDetails = () => {
         const formData = new FormData();
         Object.entries(expenseData).forEach(([key, value]) => {
           if (key === 'splits') {
-            value.forEach((split, i) => {
+            value.forEach((split) => {
               Object.entries(split).forEach(([sk, sv]) => {
                 formData.append(`expense[splits][][${sk}]`, sv);
               });
@@ -785,7 +786,8 @@ const GroupDetails = () => {
     setGroupSettingsForm({
       name: group.name || '',
       description: group.description || '',
-      currency: group.currency || 'INR'
+      currency: group.currency || 'INR',
+      simplify_debts: Boolean(group.simplify_debts)
     });
     setGroupSettingsError('');
     setGroupSettingsSuccess('');
@@ -821,10 +823,12 @@ const GroupDetails = () => {
       const response = await groupsApi.update(id, {
         name: groupSettingsForm.name.trim(),
         description: groupSettingsForm.description.trim(),
-        currency: groupSettingsForm.currency
+        currency: groupSettingsForm.currency,
+        simplify_debts: groupSettingsForm.simplify_debts
       });
 
       setGroup(normalizeGroupPayload(response.data));
+      await fetchGroupData();
       setGroupSettingsSuccess('Group details updated');
     } catch (error) {
       setGroupSettingsError(serverErrorMessage(error, 'Failed to update group'));
@@ -1246,7 +1250,7 @@ const GroupDetails = () => {
         const formData = new FormData();
         Object.entries(expenseData).forEach(([key, value]) => {
           if (key === 'splits') {
-            value.forEach((split, i) => {
+            value.forEach((split) => {
               Object.entries(split).forEach(([sk, sv]) => {
                 formData.append(`expense[splits][][${sk}]`, sv);
               });
@@ -1328,19 +1332,32 @@ const GroupDetails = () => {
   const renderBalanceCard = (balanceData) => {
     const isCurrentUser = balanceData.user.id === user.id;
     const isGuest = balanceData.user.is_guest;
-    const amount = balanceData.balance;
-    const formattedAmount = Math.abs(amount).toFixed(2);
     const currencySym = group?.currency === 'INR' ? '₹' : (group?.currency === 'USD' ? '$' : '€');
+    const outgoingSuggestions = (isGuest ? guestSettlementSuggestions : suggestedSettlements)
+      .filter((settlement) => settlement.from.id === balanceData.user.id);
+    const incomingSuggestions = suggestedSettlements
+      .filter((settlement) => settlement.to.id === balanceData.user.id);
+    const outgoingTotal = outgoingSuggestions.reduce((sum, settlement) => sum + settlement.amount, 0);
+    const incomingTotal = incomingSuggestions.reduce((sum, settlement) => sum + settlement.amount, 0);
     
     let statusClass = '';
     let statusText = '';
     
-    if (amount > 0.01) {
+    if (outgoingTotal > 0.01 && incomingTotal > 0.01) {
+      statusClass = 'text-secondary';
+      statusText = isCurrentUser
+        ? `You owe ${currencySym}${outgoingTotal.toFixed(2)} · you are owed ${currencySym}${incomingTotal.toFixed(2)}`
+        : `Owes ${currencySym}${outgoingTotal.toFixed(2)} · gets back ${currencySym}${incomingTotal.toFixed(2)}`;
+    } else if (incomingTotal > 0.01) {
       statusClass = 'text-success';
-      statusText = isCurrentUser ? `You are owed ${currencySym}${formattedAmount}` : `Gets back ${currencySym}${formattedAmount}`;
-    } else if (amount < -0.01) {
+      statusText = isCurrentUser
+        ? `You are owed ${currencySym}${incomingTotal.toFixed(2)}`
+        : `Gets back ${currencySym}${incomingTotal.toFixed(2)}`;
+    } else if (outgoingTotal > 0.01) {
       statusClass = 'text-danger';
-      statusText = isCurrentUser ? `You owe ${currencySym}${formattedAmount}` : `Owes ${currencySym}${formattedAmount}`;
+      statusText = isCurrentUser
+        ? `You owe ${currencySym}${outgoingTotal.toFixed(2)}`
+        : `Owes ${currencySym}${outgoingTotal.toFixed(2)}`;
     } else {
       statusText = 'Settled up';
     }
@@ -1361,20 +1378,19 @@ const GroupDetails = () => {
             </div>
           </div>
         </div>
-        {/* Current user owes — show Settle button */}
-        {amount < -0.01 && isCurrentUser && group?.status !== 'archived' && !group?.archived_at && (
+        {/* Current user has a payment to make — show Settle button */}
+        {outgoingTotal > 0.01 && isCurrentUser && group?.status !== 'archived' && !group?.archived_at && (
           <button
             className="btn btn-secondary"
             style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
             onClick={openSettleModal}
-            disabled={settlementCandidates.length === 0}
-            title={settlementCandidates.length === 0 ? 'No members are currently owed money' : 'Settle up'}
+            title={group.simplify_debts ? 'Settle simplified balance' : 'Settle direct payments'}
           >
             Settle
           </button>
         )}
-        {/* Guest owes money — admin can settle for them */}
-        {amount < -0.01 && !isCurrentUser && isGuest && isAdmin && !isArchived && (
+        {/* Guest has a payment to make — admin can settle for them */}
+        {outgoingTotal > 0.01 && !isCurrentUser && isGuest && isAdmin && !isArchived && (
           <button
             className="btn btn-secondary guest-settle-btn"
             style={{ padding: '0.4rem 0.8rem', fontSize: '0.85rem' }}
@@ -1442,12 +1458,8 @@ const GroupDetails = () => {
     if (!person.email) return false;
     return !existingMemberEmails.has(person.email.toLowerCase());
   });
-  const currentUserBalanceEntry = balances.find((entry) => entry.user.id === user.id);
-  const currentUserDebt = Math.max(0, -(parseFloat(currentUserBalanceEntry?.balance || 0)));
-  const settlementCandidates = balances
-    .filter((entry) => entry.user.id !== user.id && parseFloat(entry.balance || 0) > 0.01)
-    .sort((a, b) => parseFloat(b.balance || 0) - parseFloat(a.balance || 0));
-
+  const currentUserSettlementSuggestions = suggestedSettlements
+    .filter((settlement) => settlement.from.id === user.id);
   // Amount the current user can pay to a specific recipient, from backend's suggested list.
   const maxPayableToUser = (recipientId) => {
     const s = suggestedSettlements.find(
@@ -1467,10 +1479,9 @@ const GroupDetails = () => {
   const openSettleModal = () => {
     if (isArchived) return;
     // Use the backend's first suggested settlement for the current user
-    const mySuggested = suggestedSettlements.filter(s => s.from.id === user.id);
-    if (mySuggested.length === 0) return;
+    if (currentUserSettlementSuggestions.length === 0) return;
 
-    const first = mySuggested[0];
+    const first = currentUserSettlementSuggestions[0];
     setSettleError('');
     setUpiPaymentFired(false);
     setSettleForm({
@@ -2322,6 +2333,69 @@ const GroupDetails = () => {
                 )}
               </div>
 
+              <fieldset
+                className="settlement-mode-setting"
+                aria-labelledby="settlement-mode-heading"
+                disabled={!canEditGroupDetails || savingGroupSettings || group.settlement_mode_locked}
+              >
+                <div className="settlement-mode-heading">
+                  <div>
+                    <h4 id="settlement-mode-heading">Settlement method</h4>
+                    <p>Choose how this group decides who pays whom.</p>
+                  </div>
+                  <span className={`settlement-mode-state ${group.settlement_mode_locked ? 'locked' : ''}`}>
+                    {group.settlement_mode_locked ? 'Locked' : 'Admin setting'}
+                  </span>
+                </div>
+
+                <div className="settlement-mode-options">
+                  <label className={`settlement-mode-option ${!groupSettingsForm.simplify_debts ? 'selected' : ''}`}>
+                    <input
+                      type="radio"
+                      name="settlement_mode"
+                      value="pairwise"
+                      checked={!groupSettingsForm.simplify_debts}
+                      onChange={() => setGroupSettingsForm((prev) => ({ ...prev, simplify_debts: false }))}
+                    />
+                    <span className="settlement-mode-radio" aria-hidden="true" />
+                    <span className="settlement-mode-copy">
+                      <strong>Direct payments</strong>
+                      <span>Each person repays the member who originally covered their expense.</span>
+                      <small>Recommended when the group includes guests.</small>
+                    </span>
+                    {!groupSettingsForm.simplify_debts && (
+                      <span className="settlement-mode-selected">✓ Selected</span>
+                    )}
+                  </label>
+
+                  <label className={`settlement-mode-option ${groupSettingsForm.simplify_debts ? 'selected' : ''}`}>
+                    <input
+                      type="radio"
+                      name="settlement_mode"
+                      value="simplified"
+                      checked={groupSettingsForm.simplify_debts}
+                      onChange={() => setGroupSettingsForm((prev) => ({ ...prev, simplify_debts: true }))}
+                    />
+                    <span className="settlement-mode-radio" aria-hidden="true" />
+                    <span className="settlement-mode-copy">
+                      <strong>Simplify debts</strong>
+                      <span>Reduces transfers by routing payments using everyone’s net balance.</span>
+                      <small>The recipient may differ from the person who paid the expense.</small>
+                    </span>
+                    {groupSettingsForm.simplify_debts && (
+                      <span className="settlement-mode-selected">✓ Selected</span>
+                    )}
+                  </label>
+                </div>
+
+                {group.settlement_mode_locked && (
+                  <div className="settlement-mode-lock-note">
+                    <span aria-hidden="true">🔒</span>
+                    This method is locked because the group already has a recorded settlement.
+                  </div>
+                )}
+              </fieldset>
+
               {canEditGroupDetails && (
                 <button type="submit" className="btn btn-primary" disabled={savingGroupSettings}>
                   {savingGroupSettings ? 'Saving...' : 'Save Changes'}
@@ -2720,16 +2794,18 @@ const GroupDetails = () => {
       )}
 
       {showSettleModal && (() => {
-      const isProxySettle = !!settleForm.from_user_id;
-        const guestEntry = isProxySettle ? balances.find(b => b.user.id === settleForm.from_user_id) : null;
-        const guestDebt = guestEntry ? Math.max(0, -(parseFloat(guestEntry.balance || 0))) : 0;
-        const guestName = guestEntry ? group.members?.find(m => m.id === settleForm.from_user_id)?.name : null;
+        const isProxySettle = !!settleForm.from_user_id;
+        const guestName = isProxySettle
+          ? group.members?.find(m => m.id === settleForm.from_user_id)?.name
+          : null;
 
         // Derive recipient candidates from the backend's suggested settlement list.
         // Proxy: payments where guest is the payer. Normal: payments where current user is the payer.
         const payerId = isProxySettle ? settleForm.from_user_id : user.id;
         const availableSuggestions = isProxySettle ? guestSettlementSuggestions : suggestedSettlements;
         const relevantSuggestions = availableSuggestions.filter(s => s.from.id === payerId);
+        const outstandingPaymentTotal = relevantSuggestions
+          .reduce((sum, settlement) => sum + settlement.amount, 0);
 
         // Build a map: recipientId → suggested amount (from backend)
         const suggestedAmountMap = new Map(relevantSuggestions.map(s => [s.to.id, s.amount]));
@@ -2770,14 +2846,14 @@ const GroupDetails = () => {
                     <>
                       <h3 className="settle-modal-title">Settle for Guest</h3>
                       <p className="settle-modal-subtitle">
-                        <strong>{guestName}</strong> owes {currencySym}{guestDebt.toFixed(2)} total — choose who received the cash
+                        <strong>{guestName}</strong> has {currencySym}{outstandingPaymentTotal.toFixed(2)} remaining to pay — choose who received the cash
                       </p>
                     </>
                   ) : (
                     <>
                       <h3 className="settle-modal-title">Settle Up</h3>
                       <p className="settle-modal-subtitle">
-                        You owe {currencySym}{currentUserDebt.toFixed(2)} — choose who you paid. One payment clears your balance.
+                        You have {currencySym}{outstandingPaymentTotal.toFixed(2)} remaining to pay — choose who you paid.
                       </p>
                     </>
                   )}
@@ -2786,12 +2862,12 @@ const GroupDetails = () => {
                   {isProxySettle ? (
                     <>
                       <span className="settle-modal-debt-label">{guestName} owes</span>
-                      <span className="settle-modal-debt-amount">{currencySym}{guestDebt.toFixed(2)}</span>
+                      <span className="settle-modal-debt-amount">{currencySym}{outstandingPaymentTotal.toFixed(2)}</span>
                     </>
                   ) : (
                     <>
                       <span className="settle-modal-debt-label">You owe</span>
-                      <span className="settle-modal-debt-amount">{currencySym}{currentUserDebt.toFixed(2)}</span>
+                      <span className="settle-modal-debt-amount">{currencySym}{outstandingPaymentTotal.toFixed(2)}</span>
                     </>
                   )}
                 </div>

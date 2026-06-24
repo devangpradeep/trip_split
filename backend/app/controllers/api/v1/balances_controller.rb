@@ -24,37 +24,9 @@ module Api
           }
         end
 
-        suggested = Balances::SettlementSimplifier.new(balances).call.map do |s|
-          from_user = users_by_id[s[:from_user_id]]
-          to_user   = users_by_id[s[:to_user_id]]
-          {
-            from: {
-              id: from_user&.id,
-              name: from_user&.name,
-              upi_id: from_user&.upi_id,
-              is_guest: from_user&.is_guest?
-            },
-            to: {
-              id: to_user&.id,
-              name: to_user&.name,
-              upi_id: to_user&.upi_id,
-              is_guest: to_user&.is_guest?
-            },
-            amount: s[:amount].to_f
-          }
-        end
-
-        guest_suggested = Balances::PairwiseSettlementCalculator.new(@group).call.filter_map do |s|
-          from_user = users_by_id[s[:from_user_id]]
-          next unless from_user&.is_guest?
-
-          to_user = users_by_id[s[:to_user_id]]
-          {
-            from: { id: from_user.id, name: from_user.name, upi_id: from_user.upi_id, is_guest: true },
-            to: { id: to_user&.id, name: to_user&.name, upi_id: to_user&.upi_id, is_guest: to_user&.is_guest? },
-            amount: s[:amount].to_f
-          }
-        end
+        pairwise = Balances::SettlementPlanner.new(@group, balances: balances).call
+        suggested = pairwise.map { |settlement| settlement_payload(settlement, users_by_id) }
+        guest_suggested = suggested.select { |settlement| settlement.dig(:from, :is_guest) }
 
         render json: {
           balances: result,
@@ -64,6 +36,26 @@ module Api
       end
 
       private
+
+      def settlement_payload(settlement, users_by_id)
+        from_user = users_by_id[settlement[:from_user_id]]
+        to_user = users_by_id[settlement[:to_user_id]]
+
+        {
+          from: settlement_user_payload(from_user),
+          to: settlement_user_payload(to_user),
+          amount: settlement[:amount].to_f
+        }
+      end
+
+      def settlement_user_payload(user)
+        {
+          id: user&.id,
+          name: user&.name,
+          upi_id: user&.upi_id,
+          is_guest: user&.is_guest?
+        }
+      end
 
       def set_group
         @group = current_user.groups.find(params[:group_id])
