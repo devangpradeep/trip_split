@@ -34,6 +34,7 @@ Database (`config/database.yml`):
 - `DB_PASSWORD` (default: `postgres`)
 - `DB_HOST` (default: `localhost`)
 - `DATABASE_URL` (optional in local, required in production; use Neon URL on Northflank)
+- `TEST_DATABASE_URL` (optional disposable test database; defaults to `tripsplit_test` on local PostgreSQL)
 
 JWT/Auth (`config/initializers/devise.rb`):
 - `DEVISE_JWT_SECRET_KEY` (set this in real environments)
@@ -77,6 +78,26 @@ Main resources:
 - `GET /api/v1/invites/:token`
 - `POST /api/v1/invites/:token/accept`
 - `GET /api/v1/groups/:group_id/balances`
+
+## Automated tests
+
+The test suite always uses `TEST_DATABASE_URL` and never uses the development `DATABASE_URL`.
+
+Prepare and run it locally or in CI, not in the production container:
+
+```bash
+RAILS_ENV=test bin/rails db:prepare
+bin/rails test
+```
+
+Run only the financial service or API flow tests with:
+
+```bash
+bin/rails test test/services/balances
+bin/rails test test/requests
+```
+
+The complete planned coverage is documented in `API_TEST_SCENARIOS.md`.
 
 ## Dev Notes
 - CORS is configured via `CORS_ALLOWED_ORIGINS` in `config/initializers/cors.rb`.

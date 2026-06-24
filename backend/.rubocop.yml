@@ -21,6 +21,7 @@ Metrics/BlockLength:
   Exclude:
     - 'config/initializers/devise.rb'
     - 'config/routes.rb'
+    - 'test/**/*'
 
 Metrics/AbcSize:
   Exclude:
@@ -29,12 +30,18 @@ Metrics/AbcSize:
 Metrics/ClassLength:
   Exclude:
     - 'app/controllers/**/*'
+    - 'test/**/*'
 
 Metrics/MethodLength:
   Exclude:
     - 'app/controllers/**/*'
     - 'app/controllers/users/registrations_controller.rb'
     - 'app/controllers/users/sessions_controller.rb'
+    - 'test/**/*'
+
+Metrics/ParameterLists:
+  Exclude:
+    - 'test/support/**/*'
 
 Metrics/CyclomaticComplexity:
   Exclude:
@@ -43,3 +50,7 @@ Metrics/CyclomaticComplexity:
 Metrics/PerceivedComplexity:
   Exclude:
     - 'app/controllers/**/*'
+
+Style/OneClassPerFile:
+  Exclude:
+    - 'test/test_helper.rb'
