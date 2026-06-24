@@ -1314,6 +1314,17 @@ body.app-installed {
 }
 
 /* Balance summary chip on group cards */
+.group-card-balance-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  margin-bottom: 0.85rem;
+}
+
+.group-card-balance-chips .group-card-balance-chip {
+  margin-bottom: 0;
+}
+
 .group-card-balance-chip {
   display: inline-flex;
   align-items: center;
@@ -2244,6 +2255,186 @@ body.app-installed {
   gap: 1.5rem;
 }
 
+.balance-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.balance-card-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.85rem;
+  padding: 1rem 1.15rem;
+}
+
+.balance-card-person {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.balance-card-avatar {
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  color: var(--primary-color);
+  background: var(--primary-light);
+  font-weight: 700;
+}
+
+.balance-card-copy {
+  min-width: 0;
+}
+
+.balance-card-name {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.balance-card-net {
+  margin-top: 0.12rem;
+  font-size: 0.84rem;
+  line-height: 1.3;
+}
+
+.balance-breakdown-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-top: 0.32rem;
+  padding: 0;
+  border: 0;
+  color: #a5b4fc;
+  background: transparent;
+  font: inherit;
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.balance-breakdown-toggle:hover {
+  color: #c7d2fe;
+}
+
+.balance-breakdown-toggle svg {
+  transition: transform 0.18s ease;
+}
+
+.balance-breakdown-toggle svg.open {
+  transform: rotate(180deg);
+}
+
+.balance-card-actions {
+  flex-shrink: 0;
+}
+
+.balance-settle-btn {
+  min-height: 34px;
+  padding: 0.38rem 0.7rem;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.balance-breakdown {
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.85rem 1.15rem 1rem;
+  border-top: 1px solid rgba(148, 163, 184, 0.16);
+  background: rgba(7, 13, 31, 0.2);
+}
+
+.balance-breakdown-group {
+  min-width: 0;
+}
+
+.balance-breakdown-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.38rem;
+  color: var(--text-secondary);
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.balance-breakdown-heading strong {
+  color: var(--text-primary);
+  font-size: 0.75rem;
+}
+
+.balance-breakdown-row {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 30px;
+  padding: 0.28rem 0.45rem;
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-size: 0.8rem;
+}
+
+.balance-breakdown-row + .balance-breakdown-row {
+  margin-top: 0.18rem;
+}
+
+.balance-breakdown-row.outgoing {
+  background: rgba(239, 68, 68, 0.06);
+}
+
+.balance-breakdown-row.incoming {
+  background: rgba(16, 185, 129, 0.06);
+}
+
+.balance-breakdown-row.outgoing .balance-breakdown-direction,
+.balance-breakdown-row.outgoing strong {
+  color: #f87171;
+}
+
+.balance-breakdown-row.incoming .balance-breakdown-direction,
+.balance-breakdown-row.incoming strong {
+  color: #34d399;
+}
+
+.balance-breakdown-row > span:nth-child(2) {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.balance-breakdown-row strong {
+  white-space: nowrap;
+}
+
+@media (max-width: 560px) {
+  .balance-card-main {
+    align-items: flex-start;
+    padding: 0.9rem;
+  }
+
+  .balance-card-avatar {
+    width: 36px;
+    height: 36px;
+  }
+
+  .balance-breakdown {
+    padding: 0.8rem 0.9rem 0.9rem;
+  }
+}
+
 .expense-shares-panel {
   margin-top: 1.25rem;
   padding: 1rem 1.5rem;
@@ -2769,6 +2960,195 @@ body.app-installed {
   color: var(--text-secondary);
   font-size: 0.84rem;
   line-height: 1.4;
+}
+
+.settlement-mode-setting {
+  min-width: 0;
+  margin: 0.75rem 0 0;
+  padding: 1rem;
+  border: 1px solid rgba(112, 127, 255, 0.28);
+  border-radius: 14px;
+  background:
+    linear-gradient(145deg, rgba(99, 102, 241, 0.09), transparent 58%),
+    rgba(15, 23, 42, 0.3);
+}
+
+.settlement-mode-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.8rem;
+}
+
+.settlement-mode-heading h4 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.settlement-mode-heading p {
+  margin: 0.2rem 0 0;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+}
+
+.settlement-mode-state {
+  flex-shrink: 0;
+  padding: 0.22rem 0.5rem;
+  border: 1px solid rgba(99, 102, 241, 0.34);
+  border-radius: 999px;
+  color: #a5b4fc;
+  background: rgba(99, 102, 241, 0.12);
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.settlement-mode-state.locked {
+  border-color: rgba(245, 158, 11, 0.34);
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.1);
+}
+
+.settlement-mode-options {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.settlement-mode-option {
+  position: relative;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: flex-start;
+  gap: 0.7rem;
+  padding: 0.8rem;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 12px;
+  color: var(--text-primary);
+  background: rgba(15, 23, 42, 0.38);
+  cursor: pointer;
+  transition: border-color 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.settlement-mode-option:hover {
+  border-color: rgba(112, 127, 255, 0.5);
+  background: rgba(99, 102, 241, 0.09);
+}
+
+.settlement-mode-option.selected {
+  border-color: rgba(99, 102, 241, 0.72);
+  background: rgba(99, 102, 241, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(99, 102, 241, 0.16);
+}
+
+.settlement-mode-option input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+}
+
+.settlement-mode-radio {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  margin-top: 0.1rem;
+  border: 2px solid rgba(148, 163, 184, 0.65);
+  border-radius: 50%;
+  background: rgba(15, 23, 42, 0.7);
+}
+
+.settlement-mode-option.selected .settlement-mode-radio {
+  border-color: #818cf8;
+}
+
+.settlement-mode-option.selected .settlement-mode-radio::after {
+  content: "";
+  position: absolute;
+  inset: 3px;
+  border-radius: 50%;
+  background: #818cf8;
+}
+
+.settlement-mode-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 0.22rem;
+}
+
+.settlement-mode-copy strong {
+  color: #f1f5ff;
+  font-size: 0.9rem;
+}
+
+.settlement-mode-copy > span {
+  color: var(--text-secondary);
+  font-size: 0.79rem;
+  line-height: 1.35;
+}
+
+.settlement-mode-copy small {
+  color: #a5b4fc;
+  font-size: 0.72rem;
+  line-height: 1.3;
+}
+
+.settlement-mode-selected {
+  align-self: flex-start;
+  padding: 0.18rem 0.42rem;
+  border-radius: 999px;
+  color: #c7d2fe;
+  background: rgba(99, 102, 241, 0.25);
+  font-size: 0.68rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.settlement-mode-setting:disabled .settlement-mode-option {
+  cursor: not-allowed;
+  opacity: 0.68;
+}
+
+.settlement-mode-setting:disabled .settlement-mode-option.selected {
+  opacity: 1;
+}
+
+.settlement-mode-setting:disabled .settlement-mode-option:hover {
+  border-color: rgba(148, 163, 184, 0.2);
+  background: rgba(15, 23, 42, 0.38);
+}
+
+.settlement-mode-setting:disabled .settlement-mode-option.selected:hover {
+  border-color: rgba(99, 102, 241, 0.72);
+  background: rgba(99, 102, 241, 0.14);
+}
+
+.settlement-mode-lock-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.45rem;
+  margin-top: 0.75rem;
+  padding: 0.58rem 0.65rem;
+  border: 1px solid rgba(245, 158, 11, 0.24);
+  border-radius: 9px;
+  color: #fbbf24;
+  background: rgba(245, 158, 11, 0.08);
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
+@media (max-width: 560px) {
+  .settlement-mode-option {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .settlement-mode-selected {
+    grid-column: 2;
+  }
 }
 
 .settings-divider {

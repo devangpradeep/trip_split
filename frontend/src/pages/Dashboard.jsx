@@ -288,24 +288,28 @@ const Dashboard = () => {
     const balance = group.current_user_balance;
     if (balance === undefined || balance === null) return null;
     const sym = currencySymbol(group.currency);
-    const abs = Math.abs(balance).toFixed(2);
+    const amountOwed = group.current_user_is_owed ?? Math.max(0, balance);
+    const amountOwes = group.current_user_owes ?? Math.max(0, -balance);
 
-    if (balance > 0.01) {
+    if (amountOwed > 0.01 || amountOwes > 0.01) {
       return (
-        <span className="group-card-balance-chip chip-owed">
-          <TrendingUp size={13} />
-          You're owed {sym}{abs}
-        </span>
+        <div className="group-card-balance-chips">
+          {amountOwed > 0.01 && (
+            <span className="group-card-balance-chip chip-owed">
+              <TrendingUp size={13} />
+              You're owed {sym}{amountOwed.toFixed(2)}
+            </span>
+          )}
+          {amountOwes > 0.01 && (
+            <span className="group-card-balance-chip chip-owes">
+              <TrendingDown size={13} />
+              You owe {sym}{amountOwes.toFixed(2)}
+            </span>
+          )}
+        </div>
       );
     }
-    if (balance < -0.01) {
-      return (
-        <span className="group-card-balance-chip chip-owes">
-          <TrendingDown size={13} />
-          You owe {sym}{abs}
-        </span>
-      );
-    }
+
     return (
       <span className="group-card-balance-chip chip-settled">
         ✓ Settled
