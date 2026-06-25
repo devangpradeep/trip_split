@@ -9,6 +9,7 @@ Dir[Rails.root.join('test/support/**/*.rb')].each { |file| require file }
 module ActiveSupport
   class TestCase
     include TestDataHelpers
+    include ActiveSupport::Testing::TimeHelpers
 
     parallelize(workers: 1)
   end
