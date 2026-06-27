@@ -37,6 +37,7 @@ class User < ApplicationRecord
   has_many :push_subscriptions, dependent: :destroy
 
   validates :name, presence: true
+  validates :phone, presence: true, unless: :is_guest?
   validates :upi_id,
             format: { with: /\A[a-z0-9._-]+@[a-z0-9._-]+\z/i, message: 'must look like name@bank' },
             allow_blank: true
@@ -46,6 +47,8 @@ class User < ApplicationRecord
   validates :bank_account_number,
             format: { with: /\A\d{6,18}\z/, message: 'must be 6 to 18 digits' },
             allow_blank: true
+  validate :phone_must_be_exactly_10_digits
+  validate :phone_must_be_unique
 
   before_validation :normalize_profile_fields
 
@@ -57,6 +60,22 @@ class User < ApplicationRecord
 
   private
 
+  def phone_must_be_exactly_10_digits
+    return if phone.blank?
+    return if phone.match?(/\A\d{10}\z/)
+
+    errors.add(:phone, 'must be exactly 10 digits')
+  end
+
+  def phone_must_be_unique
+    return if normalized_phone.blank?
+
+    matching_users = self.class.where(normalized_phone: normalized_phone)
+    matching_users = matching_users.where.not(id: id) if persisted?
+
+    errors.add(:phone, 'has already been taken') if matching_users.exists?
+  end
+
   def normalize_profile_fields
     normalize_identity_fields
     normalize_payment_fields
@@ -65,6 +84,14 @@ class User < ApplicationRecord
   def normalize_identity_fields
     self.name = name.to_s.strip
     self.phone = phone.to_s.strip.presence
+    self.normalized_phone = normalize_phone(phone)
+  end
+
+  def normalize_phone(value)
+    normalized_value = value.to_s.strip
+    return normalized_value if normalized_value.match?(/\A\d{10}\z/)
+
+    nil
   end
 
   def normalize_payment_fields

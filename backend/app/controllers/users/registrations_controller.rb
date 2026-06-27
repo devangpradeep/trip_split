@@ -19,6 +19,7 @@ module Users
     def claim_guest_account(guest)
       if guest.update(
         name: sign_up_params[:name].presence || guest.name,
+        phone: sign_up_params[:phone],
         password: sign_up_params[:password],
         password_confirmation: sign_up_params[:password_confirmation],
         is_guest: false
@@ -30,6 +31,7 @@ module Users
             id: guest.id,
             email: guest.email,
             name: guest.name,
+            phone: guest.phone,
             avatar_url: guest.avatar_url
           }
         }, status: :ok
@@ -48,6 +50,7 @@ module Users
             id: current_user.id,
             email: current_user.email,
             name: current_user.name,
+            phone: current_user.phone,
             avatar_url: current_user.avatar_url
           }
         }, status: :ok

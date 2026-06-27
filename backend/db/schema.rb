@@ -174,6 +174,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_24_090000) do
     t.string "encrypted_password", default: "", null: false
     t.boolean "is_guest", default: false, null: false
     t.string "name"
+    t.string "normalized_phone"
     t.boolean "notify_expense_created", default: true, null: false
     t.boolean "notify_expense_deleted", default: true, null: false
     t.boolean "notify_expense_updated", default: true, null: false
@@ -187,6 +188,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_06_24_090000) do
     t.datetime "updated_at", null: false
     t.text "upi_id"
     t.index ["email"], name: "index_users_on_email", unique: true
+    t.index ["normalized_phone"], name: "index_users_on_normalized_phone", unique: true, where: "(normalized_phone IS NOT NULL)"
     t.index ["reset_password_token"], name: "index_users_on_reset_password_token", unique: true
   end
 
