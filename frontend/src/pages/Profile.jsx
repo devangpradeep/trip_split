@@ -95,6 +95,10 @@ const serverErrorMessage = (error, fallback) => {
 };
 
 const OptionalBadge = () => <span className="field-optional">Optional</span>;
+const isValidPhoneNumber = (value) => /^\d{10}$/.test(value.trim());
+const nextPhoneValue = (value, currentValue) => (
+  /^\d{0,10}$/.test(value) ? value : currentValue
+);
 
 const PROFILE_SECTIONS = [
   { id: 'basic', label: 'Basic' },
@@ -210,6 +214,18 @@ const Profile = () => {
   const handleSave = async (event) => {
     event.preventDefault();
 
+    if (!profileForm.phone.trim()) {
+      setError('Phone number is required');
+      setSuccess('');
+      return;
+    }
+
+    if (!isValidPhoneNumber(profileForm.phone)) {
+      setError('Phone number must be exactly 10 digits');
+      setSuccess('');
+      return;
+    }
+
     try {
       setSaving(true);
       setError('');
@@ -223,6 +239,7 @@ const Profile = () => {
         id: nextProfile.id,
         name: nextProfile.name,
         email: nextProfile.email,
+        phone: nextProfile.phone,
         avatar_url: nextProfile.avatar_url
       });
       setSuccess('Changes saved');
@@ -444,12 +461,17 @@ const Profile = () => {
                 <input value={profile?.email || ''} disabled />
               </div>
               <div className="form-group" style={{ marginBottom: 0 }}>
-                <label>Phone <OptionalBadge /></label>
+                <label>Phone</label>
                 <input
                   value={profileForm.phone}
-                  onChange={(event) => updateField('phone', event.target.value)}
+                  onChange={(event) => {
+                    updateField('phone', nextPhoneValue(event.target.value, profileForm.phone));
+                  }}
                   disabled={saving}
-                  inputMode="tel"
+                  inputMode="numeric"
+                  pattern="\d{10}"
+                  maxLength={10}
+                  required
                   placeholder="9876543210"
                 />
               </div>

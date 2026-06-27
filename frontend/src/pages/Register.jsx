@@ -2,6 +2,11 @@ import { useState } from 'react';
 import { useNavigate, Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/useAuth';
 
+const isValidPhoneNumber = (value) => /^\d{10}$/.test(value.trim());
+const nextPhoneValue = (value, currentValue) => (
+  /^\d{0,10}$/.test(value) ? value : currentValue
+);
+
 const Register = () => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -25,9 +30,17 @@ const Register = () => {
       return setError('Password must be at least 6 characters');
     }
 
+    if (!phone.trim()) {
+      return setError('Phone number is required');
+    }
+
+    if (!isValidPhoneNumber(phone)) {
+      return setError('Phone number must be exactly 10 digits');
+    }
+
     setLoading(true);
 
-    const result = await register(name, email, password, phone);
+    const result = await register(name, email, password, phone.trim());
     
     if (result.success) {
       navigate(nextPath);
@@ -71,12 +84,16 @@ const Register = () => {
           </div>
           
           <div className="form-group">
-            <label>Phone Number (Optional)</label>
+            <label>Phone Number</label>
             <input 
               type="tel" 
+              required
+              inputMode="numeric"
+              pattern="\d{10}"
+              maxLength={10}
               value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="+1 (555) 000-0000"
+              onChange={(e) => setPhone((current) => nextPhoneValue(e.target.value, current))}
+              placeholder="9876543210"
             />
           </div>
 

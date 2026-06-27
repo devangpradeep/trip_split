@@ -169,9 +169,12 @@ export const AuthProvider = ({ children }) => {
       }
       return { success: false, error: 'Registration failed' };
     } catch (error) {
+      const errors = error.response?.data?.errors;
       return {
         success: false,
-        error: error.response?.data?.message || 'Registration failed'
+        error: (Array.isArray(errors) && errors.length > 0)
+          ? errors.join(', ')
+          : (error.response?.data?.message || 'Registration failed')
       };
     }
   };
