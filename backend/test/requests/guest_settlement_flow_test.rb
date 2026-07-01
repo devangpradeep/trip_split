@@ -68,4 +68,19 @@ class GuestSettlementFlowTest < ActionDispatch::IntegrationTest
     assert_response :unprocessable_entity
     assert_includes json_response.fetch('errors'), 'Only admins can settle on behalf of others'
   end
+
+  # ('settling for the exact suggested amount is accepted')
+
+  test 'attempting to record a settlement to someone with no open suggestion is rejected' do
+    # Guest owes Owner, so Owner should NOT be able to record Guest → Member (no such suggestion)
+    assert_no_difference '@group.settlements.count' do
+      post "/api/v1/groups/#{@group.id}/settlements", params: {
+        settlement: { from_user_id: @guest.id, to_user_id: @member.id, amount: '50.00' }
+      }, headers: @owner_headers, as: :json
+    end
+
+    assert_response :unprocessable_entity
+  end
+
+  # ('admin cannot use from_user_id to proxy-settle for a registered non-guest user')
 end

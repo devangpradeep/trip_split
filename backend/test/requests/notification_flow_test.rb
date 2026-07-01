@@ -126,6 +126,72 @@ class NotificationFlowTest < ActionDispatch::IntegrationTest
     assert_nil other_notification.reload.read_at
   end
 
+  test 'limit=0 falls back to the default page size of 20' do
+    25.times do |i|
+      create_notification(user: @owner, title: "Notif #{i}",
+                          created_at: Time.zone.parse('2026-06-20 09:00:00') + i.minutes)
+    end
+
+    get '/api/v1/notifications', params: { limit: 0 }, headers: @headers, as: :json
+
+    assert_response :ok
+    assert_equal 20, json_response.fetch('notifications').length
+  end
+
+  test 'limit exceeding maximum is capped at 50' do
+    55.times do |i|
+      create_notification(user: @owner, title: "Notif #{i}",
+                          created_at: Time.zone.parse('2026-06-20 09:00:00') + i.minutes)
+    end
+
+    get '/api/v1/notifications', params: { limit: 100 }, headers: @headers, as: :json
+
+    assert_response :ok
+    assert_equal 50, json_response.fetch('notifications').length
+  end
+
+  test 'unread_count only reflects the current users unread notifications' do
+    create_notification(user: @owner,      title: 'My notif',    created_at: 1.hour.ago)
+    create_notification(user: @other_user, title: 'Other notif', created_at: 1.hour.ago)
+
+    get '/api/v1/notifications', headers: @headers, as: :json
+
+    assert_response :ok
+    assert_equal 1, json_response.fetch('unread_count')
+  end
+
+  test 'after failing to read another users notification it remains unread' do
+    notification = create_notification(
+      user: @other_user,
+      title: 'Still unread',
+      created_at: Time.zone.parse('2026-06-20 09:00:00')
+    )
+
+    patch "/api/v1/notifications/#{notification.id}/read", headers: @headers, as: :json
+    assert_response :not_found
+
+    assert_nil notification.reload.read_at, 'Notification must still be unread after the failed attempt'
+  end
+
+  test 'listing notifications is safe when the actor or group record no longer exists' do
+    notification = create_notification(
+      user: @owner,
+      title: 'Orphaned notification',
+      created_at: 1.hour.ago
+    )
+    # Simulate actor deletion by setting actor_id to nil directly at DB level
+    # (bypassing callbacks so the notification row survives).
+    notification.update_columns(actor_id: nil, group_id: nil)
+
+    get '/api/v1/notifications', headers: @headers, as: :json
+
+    assert_response :ok
+    entry = json_response.fetch('notifications').find { |n| n['id'] == notification.id }
+    assert_not_nil entry, 'Orphaned notification must appear in the list'
+    assert_nil entry.fetch('actor')
+    assert_nil entry.fetch('group')
+  end
+
   private
 
   def create_notification(user:, title:, created_at:, **attributes)

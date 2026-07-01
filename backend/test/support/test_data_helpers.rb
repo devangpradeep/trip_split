@@ -51,6 +51,19 @@ module TestDataHelpers
     group.settlements.create!(**settlement_attributes, from_user: from, to_user: to, amount: amount)
   end
 
+  # Creates a group invite. Defaults to a 48-hour expiry.
+  # Pass `no_expiry: true` for a non-expiring invite, or `expires_in_hours:` for a custom TTL.
+  # Pass `revoked: true` to immediately revoke the invite.
+  def create_group_invite(group:, created_by:, expires_in_hours: 48, no_expiry: false, revoked: false)
+    expires_at = no_expiry ? nil : Time.current + expires_in_hours.hours
+    revoked_at = revoked ? Time.current : nil
+    group.group_invites.create!(
+      created_by: created_by,
+      expires_at: expires_at,
+      revoked_at: revoked_at
+    )
+  end
+
   def assert_decimal(expected, actual)
     assert_equal BigDecimal(expected.to_s), actual.to_d
   end
