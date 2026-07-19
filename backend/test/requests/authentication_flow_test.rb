@@ -56,4 +56,26 @@ class AuthenticationFlowTest < ActionDispatch::IntegrationTest
     assert_response :unauthorized
     assert_nil response.headers['Authorization']
   end
+
+  test 'registration rejects missing and malformed phone numbers' do
+    invalid_phone_numbers = [nil, '', '123456789', '12345678901', '12345abcde']
+
+    invalid_phone_numbers.each_with_index do |phone, index|
+      assert_no_difference 'User.count' do
+        post '/users', params: {
+          user: {
+            name: 'New traveller',
+            email: "new-traveller-#{index}@example.com",
+            phone: phone,
+            password: TestDataHelpers::DEFAULT_PASSWORD,
+            password_confirmation: TestDataHelpers::DEFAULT_PASSWORD
+          }
+        }, as: :json
+      end
+
+      assert_response :unprocessable_entity
+      assert_nil response.headers['Authorization']
+      assert_match(/Phone (can't be blank|must be exactly 10 digits)/, json_response.fetch('message'))
+    end
+  end
 end
