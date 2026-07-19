@@ -86,4 +86,34 @@ class ExpenseFlowsTest < ActionDispatch::IntegrationTest
     assert_response :unprocessable_entity
     assert_includes json_response.fetch('errors'), 'Payer must be a member of this group'
   end
+
+  # The API has no idempotency key mechanism on expense creation.
+  # Two identical POST requests each succeed and produce two separate expense rows.
+  # This test documents the current behavior; it should be updated to assert
+  # idempotent behavior once idempotency keys are implemented.
+  test 'duplicate identical POST requests currently create two separate expenses (known gap)' do
+    expense_params = {
+      expense: {
+        description: 'Idempotency test',
+        amount: '100.00',
+        currency: 'INR',
+        split_type: 'equal',
+        date: '2026-06-20',
+        splits: [{ user_id: @organiser.id }, { user_id: @traveller.id }]
+      }
+    }
+
+    assert_difference 'Expense.count', 2 do
+      post "/api/v1/groups/#{@group.id}/expenses", params: expense_params,
+           headers: @headers, as: :json
+      assert_response :created
+
+      post "/api/v1/groups/#{@group.id}/expenses", params: expense_params,
+           headers: @headers, as: :json
+      assert_response :created
+    end
+
+    # When idempotency keys are added, the expectation below should replace the one above:
+    # assert_difference 'Expense.count', 1 do ... end
+  end
 end

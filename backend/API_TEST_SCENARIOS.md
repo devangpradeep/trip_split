@@ -630,3 +630,55 @@ A financial change is ready to deploy only when:
 - Relevant concurrency tests pass for code that can create or settle financial records.
 - No test depends on network access, wall-clock timing, or unordered database results.
 - The complete test suite runs in CI against PostgreSQL on every pull request.
+
+---
+
+# Additional user-perspective scenarios
+
+These scenarios were identified by reviewing the actual controller implementations and are not covered by the original contract above. They represent real user mistakes or edge cases a user would encounter in practice.
+
+## Group lifecycle
+
+- **ARCH-INVITE P0** Archiving a group with an active invite link must atomically revoke that invite. The `with_lock` + `update_all` path in `GroupsController#archive` must be tested end-to-end. *(Covered in `group_flows_test.rb` — `settled group archives and active invite links are atomically revoked`)*
+
+- **DEL-SETTLED P0** The group owner can permanently delete a group that has historical settlements provided all net balances are zero. This exercises the cascade deletion of memberships, expenses, splits, and settlements. *(Covered in `group_flows_test.rb` — `owner can delete a fully-settled group and all dependents are removed`)*
+
+- **IDX-AMOUNTS P0** `GET /api/v1/groups` must populate `current_user_owes` and `current_user_is_owed` from the planner output, not from raw balance arithmetic. *(Covered in `group_flows_test.rb` — `groups index reflects the correct amounts owed and is owed`)*
+
+## Settlement direction
+
+- **SET-WRONG-DIR P0** A user attempting to record a settlement to a recipient for whom no planner suggestion currently exists (wrong direction or already fully settled) must receive an `unprocessable_entity` response. *(Covered in `settlement_flows_test.rb` — `settling to someone who is not a suggested creditor is rejected` and `guest_settlement_flow_test.rb` — `attempting to record a settlement to someone with no open suggestion is rejected`)*
+
+## Expense permissions
+
+- **EXP-CREATOR-NODEL P0** A user who only created an expense (neither payer nor group owner) must not be able to delete it. The `ensure_can_delete_expense!` guard allows only payer and group owner. *(Covered in `expense_extended_flows_test.rb` — `expense creator alone cannot delete the expense`)*
+
+- **EXP-CREATOR-EDIT P0** The same creator (not payer, not owner) is permitted to **edit** an expense. `ensure_can_edit_expense!` includes creators for updates but not for deletes — this asymmetry must be tested. *(Covered in `expense_extended_flows_test.rb` — `original creator can update an expense even if they are not the payer`)*
+
+## Profile protection
+
+- **PROFILE-EMAIL P0** Submitting `email` in a `PATCH /api/v1/profile` request must be silently ignored. The `profile_params` permit list intentionally excludes `email`. *(Covered in `profile_flows_test.rb` — `submitting email in the profile update payload is silently ignored`)*
+
+## Balances isolation
+
+- **BAL-NONMEMBER P0** A request to `GET /api/v1/groups/:group_id/balances` by a non-member must return `404`. The `set_group` method scopes by `current_user.groups`. *(Covered in `group_flows_test.rb` — `non-member cannot inspect group balances`)*
+
+## Invite link lifecycle
+
+- **INV-REVOKE-ON-NEW P0** Creating a new invite via `POST /api/v1/groups/:id/invites` must revoke all previously active invites for the group. *(Covered in `invite_flows_test.rb` — `creating a new invite revokes all previous active invites`)*
+
+## Notification edge cases
+
+- **NOTIF-PAYER-SPLIT-EXCL P1** A payer deliberately excluded from the expense splits must still receive a notification, because `expense_notification_recipients` unions `paid_by_id` with split participant IDs. *(Covered in `notification_producing_flows_test.rb` — `payer who is excluded from the expense splits still receives a notification`)*
+
+- **NOTIF-SET-PREF P1** A settlement recipient who has disabled `notify_settlement_created` must not receive a notification. *(Covered in `notification_producing_flows_test.rb` — `settlement recipient who disabled the preference does not get a notification`)*
+
+## Push subscription security
+
+- **PUSH-SAME-ENDPOINT P0** When two different users submit the same push endpoint the application must make a deterministic, documented security decision (safe transfer or rejection). The chosen behavior must be explicitly asserted. *(Covered in `push_subscription_flow_test.rb` — `submitting an existing endpoint belonging to another user transfers it to the current user`)*
+
+## Notification limit clamping
+
+- **NOTIF-LIMIT-LOW P1** `limit=0` or a negative limit for `GET /api/v1/notifications` must fall back to the default page size of 20. *(Covered in `notification_flow_test.rb`)*
+
+- **NOTIF-LIMIT-HIGH P1** `limit=100` must be capped at 50. *(Covered in `notification_flow_test.rb`)*

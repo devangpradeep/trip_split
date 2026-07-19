@@ -238,6 +238,47 @@ class NotificationProducingFlowsTest < ActionDispatch::IntegrationTest
     assert_equal true, json_response.dig('member', 'is_guest')
   end
 
+  test 'payer who is excluded from the expense splits still receives a notification' do
+    # @owner is payer but is intentionally not in the splits list
+    without_push_delivery do
+      assert_difference 'Notification.count', 1 do
+        post "/api/v1/groups/#{@group.id}/expenses", params: {
+          expense: {
+            description: 'Payer excluded from split',
+            amount: '60.00',
+            currency: 'INR',
+            split_type: 'exact',
+            date: '2026-06-20',
+            paid_by_id: @owner.id,
+            splits: [{ user_id: @traveller.id, amount: '60.00' }]
+          }
+        }, headers: @traveller_headers, as: :json
+      end
+    end
+
+    assert_response :created
+    # Traveller created the expense so is the actor — owner should be notified (is payer)
+    assert_single_notification_for(@owner, 'expense_created')
+    assert_no_notification_for(@traveller, 'expense_created')
+  end
+
+  # notify_settlement_created preference respected for recipient
+  test 'settlement recipient who disabled the preference does not get a notification' do
+    @owner.update!(notify_settlement_created: false)
+    create_expense(group: @group, paid_by: @owner, amount: '80.00',
+                   splits: { @traveller => '80.00' })
+
+    without_push_delivery do
+      assert_no_difference 'Notification.count' do
+        post "/api/v1/groups/#{@group.id}/settlements", params: {
+          settlement: { to_user_id: @owner.id, amount: '80.00' }
+        }, headers: @traveller_headers, as: :json
+      end
+    end
+
+    assert_response :created
+  end
+
   private
 
   def without_push_delivery(&)
