@@ -14,7 +14,8 @@ module Users
           email: current_user.email,
           name: current_user.name,
           phone: current_user.phone,
-          avatar_url: current_user.avatar_url
+          avatar_url: current_user.avatar_url,
+          is_guest: current_user.is_guest?
         }
       }, status: :ok
     end

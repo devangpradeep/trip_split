@@ -120,8 +120,12 @@ export const pushSubscriptionsApi = {
 };
 
 export const groupMembersApi = {
-  add: (groupId, email, name) => api.post(`/groups/${groupId}/members`, {
-    member: { email, ...(name ? { name } : {}) }
+  add: (groupId, { email, phone, name } = {}) => api.post(`/groups/${groupId}/members`, {
+    member: {
+      ...(email ? { email } : {}),
+      ...(phone ? { phone } : {}),
+      ...(name  ? { name }  : {})
+    }
   }),
   remove: (groupId, memberId) => api.delete(`/groups/${groupId}/members/${memberId}`),
   suggestions: (groupId, query = '', limit = 10) => api.get(`/groups/${groupId}/members/suggestions`, {

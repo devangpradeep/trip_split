@@ -45,27 +45,63 @@ module Api
       end
 
       def create
-        email = member_params[:email].to_s.strip.downcase
-        user = User.find_by(email: email)
+        phone = member_params[:phone].to_s.gsub(/\D/, '')[0, 10].presence
+        email = member_params[:email].to_s.strip.downcase.presence
 
-        if user.nil?
-          # Create a guest user — only admins/owners reach this (ensure_owner! runs first)
-          display_name = member_params[:name].to_s.strip
-          if display_name.blank?
-            return render json: { error: 'Display name is required when adding a guest member' },
-                          status: :unprocessable_entity
+        # -----------------------------------------------------------------------
+        # Resolve which identifier was provided and find/build the user
+        # -----------------------------------------------------------------------
+        if phone.present?
+          # Phone-first path — look up a real user by their 10-digit phone
+          user = User.find_by(normalized_phone: phone)
+
+          if user.nil?
+            # No account yet — create a phone-only guest placeholder
+            display_name = member_params[:name].to_s.strip
+            if display_name.blank?
+              return render json: { error: 'Display name is required when adding a guest by phone' },
+                            status: :unprocessable_entity
+            end
+
+            placeholder_email = "guest+phone#{phone}@tripsplit.internal"
+            user = User.find_by(email: placeholder_email) ||
+                   User.new(
+                     email: placeholder_email,
+                     phone: phone,
+                     name: display_name,
+                     is_guest: true,
+                     password: SecureRandom.hex(32)
+                   )
+
+            unless user.persisted? || user.save
+              return render json: { errors: user.errors.full_messages }, status: :unprocessable_entity
+            end
           end
+        elsif email.present?
+          # Email-first path (existing behaviour)
+          user = User.find_by(email: email)
 
-          user = User.new(
-            email: email,
-            name: display_name,
-            is_guest: true,
-            password: SecureRandom.hex(32)
-          )
+          if user.nil?
+            display_name = member_params[:name].to_s.strip
+            if display_name.blank?
+              return render json: { error: 'Display name is required when adding a guest member' },
+                            status: :unprocessable_entity
+            end
 
-          unless user.save
-            return render json: { errors: user.errors.full_messages }, status: :unprocessable_entity
+            user = User.new(
+              email: email,
+              name: display_name,
+              is_guest: true,
+              password: SecureRandom.hex(32)
+            )
+
+            unless user.save
+              return render json: { errors: user.errors.full_messages }, status: :unprocessable_entity
+            end
           end
+        else
+          return render json: { error: 'Provide an email address or a phone number to add a member' },
+                        status: :unprocessable_entity
         end
 
         membership = @group.group_memberships.find_or_initialize_by(user: user)
@@ -84,6 +120,7 @@ module Api
               id: user.id,
               name: user.name,
               email: user.email,
+              phone: user.phone,
               avatar_url: user.avatar_url,
               is_guest: user.is_guest?,
               can_remove: member_removable?(user.id)
@@ -170,7 +207,7 @@ module Api
       end
 
       def member_params
-        params.require(:member).permit(:email, :name)
+        params.require(:member).permit(:email, :phone, :name)
       end
 
       def suggestions_params

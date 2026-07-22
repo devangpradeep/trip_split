@@ -10,6 +10,7 @@ import GroupDetails from './pages/GroupDetails';
 import JoinGroup from './pages/JoinGroup';
 import Profile from './pages/Profile';
 import InstallPrompt from './components/InstallPrompt';
+import PhoneSetupModal from './components/PhoneSetupModal';
 
 // Protected Route Wrapper
 const ProtectedRoute = ({ children }) => {
@@ -33,32 +34,39 @@ const AppRoutes = () => {
     return <div className="container text-center pt-20">Initializing app...</div>;
   }
 
-  return (
-    <Routes>
-      <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login />} />
-      <Route path="/register" element={user ? <Navigate to="/" replace /> : <Register />} />
-      <Route path="/join/:token" element={<JoinGroup />} />
-      
-      <Route path="/" element={
-        <ProtectedRoute>
-          <Dashboard />
-        </ProtectedRoute>
-      } />
-      
-      <Route path="/groups/:id" element={
-        <ProtectedRoute>
-          <GroupDetails />
-        </ProtectedRoute>
-      } />
+  // Show the phone-setup modal for any authenticated, non-guest user who has
+  // no phone number yet (fresh registration or just claimed a guest account).
+  const needsPhoneSetup = user && !user.is_guest && !user.phone;
 
-      <Route path="/profile" element={
-        <ProtectedRoute>
-          <Profile />
-        </ProtectedRoute>
-      } />
-      
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+  return (
+    <>
+      {needsPhoneSetup && <PhoneSetupModal />}
+      <Routes>
+        <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login />} />
+        <Route path="/register" element={user ? <Navigate to="/" replace /> : <Register />} />
+        <Route path="/join/:token" element={<JoinGroup />} />
+        
+        <Route path="/" element={
+          <ProtectedRoute>
+            <Dashboard />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="/groups/:id" element={
+          <ProtectedRoute>
+            <GroupDetails />
+          </ProtectedRoute>
+        } />
+
+        <Route path="/profile" element={
+          <ProtectedRoute>
+            <Profile />
+          </ProtectedRoute>
+        } />
+        
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </>
   );
 };
 
