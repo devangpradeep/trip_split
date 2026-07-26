@@ -18,7 +18,9 @@ import {
   Camera,
   X,
   Image,
-  ChevronDown
+  ChevronDown,
+  Mail,
+  Phone
 } from 'lucide-react';
 import NotificationBell from '../components/NotificationBell';
 
@@ -2633,6 +2635,10 @@ const GroupDetails = () => {
                       padding: '0.32rem 0.9rem',
                       borderRadius: '8px',
                       border: '1px solid',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.42rem',
                       fontSize: '0.82rem',
                       fontWeight: 600,
                       cursor: 'pointer',
@@ -2645,7 +2651,8 @@ const GroupDetails = () => {
                     }}
                     disabled={addingMember}
                   >
-                    {mode === 'email' ? '✉ Email' : '📱 Phone'}
+                    {mode === 'email' ? <Mail size={16} strokeWidth={2} /> : <Phone size={16} strokeWidth={2} />}
+                    <span>{mode === 'email' ? 'Email' : 'Phone'}</span>
                   </button>
                 ))}
               </div>
