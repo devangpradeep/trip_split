@@ -18,7 +18,9 @@ import {
   Camera,
   X,
   Image,
-  ChevronDown
+  ChevronDown,
+  Mail,
+  Phone
 } from 'lucide-react';
 import NotificationBell from '../components/NotificationBell';
 
@@ -412,6 +414,8 @@ const GroupDetails = () => {
   const [addMemberError, setAddMemberError] = useState('');
   const [addMemberSuccess, setAddMemberSuccess] = useState('');
   const [memberEmailInput, setMemberEmailInput] = useState('');
+  const [memberPhoneInput, setMemberPhoneInput] = useState('');
+  const [memberAddMode, setMemberAddMode] = useState('email'); // 'email' | 'phone'
   const [memberGuestName, setMemberGuestName] = useState('');
   const [selectedSuggestedFriend, setSelectedSuggestedFriend] = useState(null);
   const [addingMember, setAddingMember] = useState(false);
@@ -766,6 +770,8 @@ const GroupDetails = () => {
     setAddMemberError('');
     setAddMemberSuccess('');
     setMemberEmailInput('');
+    setMemberPhoneInput('');
+    setMemberAddMode('email');
     setSelectedSuggestedFriend(null);
     setFriendSuggestionError('');
     setFriendSuggestions([]);
@@ -783,6 +789,8 @@ const GroupDetails = () => {
     setAddMemberError('');
     setAddMemberSuccess('');
     setMemberEmailInput('');
+    setMemberPhoneInput('');
+    setMemberGuestName('');
     setSelectedSuggestedFriend(null);
     setFriendSuggestionError('');
     setFriendSuggestions([]);
@@ -1023,10 +1031,60 @@ const GroupDetails = () => {
   };
 
   const handleAddMember = async (event) => {
-    if (event) {
-      event.preventDefault();
+    if (event) event.preventDefault();
+
+    if (memberAddMode === 'phone') {
+      // ── Phone mode ──────────────────────────────────────────────────────────
+      const digits = memberPhoneInput.replace(/\D/g, '').slice(0, 10);
+      if (!digits || digits.length !== 10) {
+        setAddMemberError('Please enter a valid 10-digit phone number');
+        setAddMemberSuccess('');
+        return;
+      }
+
+      const isAlreadyMember = group.members.some(
+        (m) => m.phone === digits || m.phone === memberPhoneInput.trim()
+      );
+      if (isAlreadyMember) {
+        setAddMemberError('A member with this phone number is already in this group');
+        setAddMemberSuccess('');
+        return;
+      }
+
+      try {
+        setAddingMember(true);
+        setAddMemberError('');
+        setAddMemberSuccess('');
+
+        const response = await groupMembersApi.add(id, {
+          phone: digits,
+          name: memberGuestName.trim() || undefined
+        });
+        const member = response.data?.member;
+
+        if (member?.id) {
+          setGroup((prev) => {
+            if (!prev) return prev;
+            const exists = prev.members.some((m) => m.id === member.id);
+            if (exists) return prev;
+            return { ...prev, members: [...prev.members, member] };
+          });
+        }
+
+        setMemberPhoneInput('');
+        setMemberGuestName('');
+        setAddMemberSuccess(member?.name ? `${member.name} added to the group` : 'Member added successfully');
+      } catch (error) {
+        const serverError = error.response?.data?.errors?.join(', ') || error.response?.data?.error;
+        setAddMemberError(serverError || 'Failed to add member');
+        setAddMemberSuccess('');
+      } finally {
+        setAddingMember(false);
+      }
+      return;
     }
 
+    // ── Email mode (existing behaviour) ──────────────────────────────────────
     const normalizedEmail = (selectedSuggestedFriend?.email || memberEmailInput).trim().toLowerCase();
     if (!normalizedEmail) {
       setAddMemberError('Type a name and select a user, or enter an email address');
@@ -1054,20 +1112,18 @@ const GroupDetails = () => {
       setAddMemberError('');
       setAddMemberSuccess('');
 
-      const response = await groupMembersApi.add(id, normalizedEmail, memberGuestName.trim() || undefined);
+      const response = await groupMembersApi.add(id, {
+        email: normalizedEmail,
+        name: memberGuestName.trim() || undefined
+      });
       const member = response.data?.member;
 
       if (member?.id) {
         setGroup((prevGroup) => {
           if (!prevGroup) return prevGroup;
-
-          const alreadyExists = prevGroup.members.some((existingMember) => existingMember.id === member.id);
+          const alreadyExists = prevGroup.members.some((m) => m.id === member.id);
           if (alreadyExists) return prevGroup;
-
-          return {
-            ...prevGroup,
-            members: [...prevGroup.members, member]
-          };
+          return { ...prevGroup, members: [...prevGroup.members, member] };
         });
       }
 
@@ -2562,6 +2618,45 @@ const GroupDetails = () => {
 
             <div className="glass-panel" style={{ padding: '0.95rem 1rem', marginBottom: '1rem' }}>
               <h4 style={{ marginBottom: '0.6rem', fontSize: '1rem' }}>Add Friends</h4>
+
+              {/* Mode toggle */}
+              <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '0.8rem' }}>
+                {['email', 'phone'].map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => {
+                      setMemberAddMode(mode);
+                      setAddMemberError('');
+                      setAddMemberSuccess('');
+                      setMemberGuestName('');
+                    }}
+                    style={{
+                      padding: '0.32rem 0.9rem',
+                      borderRadius: '8px',
+                      border: '1px solid',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.42rem',
+                      fontSize: '0.82rem',
+                      fontWeight: 600,
+                      cursor: 'pointer',
+                      transition: 'all 0.18s ease',
+                      borderColor: memberAddMode === mode ? 'var(--primary-color)' : 'var(--surface-border)',
+                      background: memberAddMode === mode
+                        ? 'linear-gradient(135deg, rgba(99,102,241,0.88), rgba(79,70,229,0.92))'
+                        : 'rgba(255,255,255,0.04)',
+                      color: memberAddMode === mode ? '#fff' : 'var(--text-secondary)'
+                    }}
+                    disabled={addingMember}
+                  >
+                    {mode === 'email' ? <Mail size={16} strokeWidth={2} /> : <Phone size={16} strokeWidth={2} />}
+                    <span>{mode === 'email' ? 'Email' : 'Phone'}</span>
+                  </button>
+                ))}
+              </div>
+
               <form
                 onSubmit={handleAddMember}
                 autoComplete="off"
@@ -2570,47 +2665,76 @@ const GroupDetails = () => {
                 className="flex gap-2 items-center"
                 style={{ flexWrap: 'wrap' }}
               >
-                <input
-                  type="search"
-                  name="friend_lookup_query"
-                  value={memberEmailInput}
-                  onChange={(e) => {
-                    setMemberEmailInput(e.target.value);
-                    setSelectedSuggestedFriend(null);
-                    setAddMemberError('');
-                  }}
-                  placeholder="Email or name to search"
-                  autoComplete="new-password"
-                  autoCorrect="off"
-                  autoCapitalize="none"
-                  spellCheck={false}
-                  inputMode="search"
-                  data-lpignore="true"
-                  data-1p-ignore="true"
-                  data-bwignore="true"
-                  data-form-type="other"
-                  style={{
-                    flex: 1,
-                    minWidth: '230px',
-                    background: 'rgba(15, 23, 42, 0.4)',
-                    border: '1px solid var(--surface-border)',
-                    borderRadius: '10px',
-                    padding: '0.62rem 0.78rem',
-                    color: 'var(--text-primary)'
-                  }}
-                  disabled={addingMember}
-                />
+                {memberAddMode === 'email' ? (
+                  <input
+                    type="search"
+                    name="friend_lookup_query"
+                    value={memberEmailInput}
+                    onChange={(e) => {
+                      setMemberEmailInput(e.target.value);
+                      setSelectedSuggestedFriend(null);
+                      setAddMemberError('');
+                    }}
+                    placeholder="Email or name to search"
+                    autoComplete="new-password"
+                    autoCorrect="off"
+                    autoCapitalize="none"
+                    spellCheck={false}
+                    inputMode="email"
+                    data-lpignore="true"
+                    data-1p-ignore="true"
+                    data-bwignore="true"
+                    data-form-type="other"
+                    style={{
+                      flex: 1,
+                      minWidth: '200px',
+                      background: 'rgba(15, 23, 42, 0.4)',
+                      border: '1px solid var(--surface-border)',
+                      borderRadius: '10px',
+                      padding: '0.62rem 0.78rem',
+                      color: 'var(--text-primary)'
+                    }}
+                    disabled={addingMember}
+                  />
+                ) : (
+                  <input
+                    type="tel"
+                    name="guest_phone"
+                    inputMode="numeric"
+                    pattern="\d{10}"
+                    maxLength={10}
+                    value={memberPhoneInput}
+                    onChange={(e) => {
+                      const v = e.target.value.replace(/\D/g, '').slice(0, 10);
+                      setMemberPhoneInput(v);
+                      setAddMemberError('');
+                    }}
+                    placeholder="10-digit phone number"
+                    autoComplete="off"
+                    data-lpignore="true"
+                    style={{
+                      flex: 1,
+                      minWidth: '200px',
+                      background: 'rgba(15, 23, 42, 0.4)',
+                      border: '1px solid var(--surface-border)',
+                      borderRadius: '10px',
+                      padding: '0.62rem 0.78rem',
+                      color: 'var(--text-primary)'
+                    }}
+                    disabled={addingMember}
+                  />
+                )}
                 <input
                   type="text"
                   name="guest_display_name"
                   value={memberGuestName}
                   onChange={(e) => setMemberGuestName(e.target.value)}
-                  placeholder="Display name (required for new users)"
+                  placeholder={memberAddMode === 'phone' ? 'Display name (required)' : 'Display name (required for new users)'}
                   autoComplete="off"
                   data-lpignore="true"
                   style={{
                     flex: 1,
-                    minWidth: '200px',
+                    minWidth: '180px',
                     background: 'rgba(15, 23, 42, 0.4)',
                     border: '1px solid var(--surface-border)',
                     borderRadius: '10px',
@@ -2624,8 +2748,11 @@ const GroupDetails = () => {
                 </button>
               </form>
               <p style={{ marginTop: '0.5rem', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                If the email has no TripSplit account, they’ll be added as a guest (display name required).
+                {memberAddMode === 'phone'
+                  ? 'Add a guest by their mobile number. If they sign up later with the same number, their account merges automatically.'
+                  : 'If the email has no TripSplit account, they\'ll be added as a guest (display name required).'}
               </p>
+
 
               {selectedSuggestedFriend && (
                 <div style={{ marginTop: '0.55rem', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
