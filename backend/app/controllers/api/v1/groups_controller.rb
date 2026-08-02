@@ -13,8 +13,47 @@ module Api
       before_action :ensure_settlement_mode_editable!, only: %i[update]
 
       def index
-        @groups = current_user.groups.includes(:members, :group_memberships).order(created_at: :desc)
-        render json: @groups.map { |group| group_payload(group) }
+        groups = current_user.groups
+        archived_count = groups.where.not(archived_at: nil).count
+
+        case params[:status]
+        when 'active'
+          groups = groups.where(archived_at: nil)
+        when 'archived'
+          groups = groups.where.not(archived_at: nil)
+        when nil, ''
+          # Preserve the original unfiltered response for existing API clients.
+        else
+          return render json: { error: 'Status must be active or archived' }, status: :unprocessable_entity
+        end
+
+        @groups = groups.includes(:members, :group_memberships).order(created_at: :desc)
+        payload = @groups.map { |group| group_payload(group) }
+
+        if params[:status].present?
+          render json: { groups: payload, archived_count: archived_count }
+        else
+          render json: payload
+        end
+      end
+
+      def friend_candidates
+        friends = User.joins(:group_memberships)
+                      .where(group_memberships: { group_id: current_user.group_ids })
+                      .where.not(id: current_user.id)
+                      .distinct
+                      .order(:name, :email)
+
+        render json: {
+          friends: friends.map do |friend|
+            {
+              id: friend.id,
+              name: friend.name,
+              email: friend.email,
+              avatar_url: friend.avatar_url
+            }
+          end
+        }
       end
 
       def show
