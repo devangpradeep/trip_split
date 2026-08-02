@@ -28,6 +28,10 @@ Rails.application.routes.draw do
       end
 
       resources :groups do
+        collection do
+          get :friend_candidates
+        end
+
         member do
           post :archive
           post :restore

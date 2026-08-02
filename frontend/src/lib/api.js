@@ -145,6 +145,8 @@ export const groupInvitesApi = {
 };
 
 export const groupsApi = {
+  list: (status = 'active') => api.get('/groups', { params: { status } }),
+  friendCandidates: () => api.get('/groups/friend_candidates'),
   update: (groupId, group) => api.patch(`/groups/${groupId}`, { group }),
   archive: (groupId) => api.post(`/groups/${groupId}/archive`),
   restore: (groupId) => api.post(`/groups/${groupId}/restore`),

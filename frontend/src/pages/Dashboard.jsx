@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/useAuth';
-import api, { groupMembersApi } from '../lib/api';
+import api, { groupMembersApi, groupsApi } from '../lib/api';
 import { LogOut, Plus, Users, ArrowRight, UserCircle, Archive, ChevronDown, ChevronRight, TrendingUp, TrendingDown, Search, X } from 'lucide-react';
 import NotificationBell from '../components/NotificationBell';
 
@@ -12,7 +12,6 @@ const normalizeGroups = (payload) => {
   return payload?.groups || payload?.data || [];
 };
 
-const ARCHIVED_GROUPS_COLLAPSED_KEY = 'tripsplit:archived-groups-collapsed';
 const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test((value || '').trim());
 
 const formatRelativeTime = (dateString) => {
@@ -106,6 +105,13 @@ const DashboardCustomSelect = ({ value, options, onChange, disabled = false }) =
 const Dashboard = () => {
   const { user, logout } = useAuth();
   const [groups, setGroups] = useState([]);
+  const [archivedGroups, setArchivedGroups] = useState([]);
+  const [archivedGroupCount, setArchivedGroupCount] = useState(0);
+  const [archivedGroupsLoaded, setArchivedGroupsLoaded] = useState(false);
+  const [loadingArchivedGroups, setLoadingArchivedGroups] = useState(false);
+  const [archivedGroupsError, setArchivedGroupsError] = useState('');
+  const [friendCandidates, setFriendCandidates] = useState([]);
+  const [friendCandidatesLoaded, setFriendCandidatesLoaded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showAddGroup, setShowAddGroup] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
@@ -118,9 +124,7 @@ const Dashboard = () => {
   const [groupNameError, setGroupNameError] = useState('');
   const [createGroupError, setCreateGroupError] = useState('');
   const [groupSearchQuery, setGroupSearchQuery] = useState('');
-  const [archivedGroupsCollapsed, setArchivedGroupsCollapsed] = useState(() => (
-    localStorage.getItem(ARCHIVED_GROUPS_COLLAPSED_KEY) === 'true'
-  ));
+  const [archivedGroupsCollapsed, setArchivedGroupsCollapsed] = useState(true);
   const currencyOptions = [
     { value: 'INR', label: 'INR (₹)' },
     { value: 'USD', label: 'USD ($)' },
@@ -129,8 +133,9 @@ const Dashboard = () => {
 
   const fetchGroups = useCallback(async () => {
     try {
-      const response = await api.get('/groups');
+      const response = await groupsApi.list('active');
       setGroups(normalizeGroups(response.data));
+      setArchivedGroupCount(response.data?.archived_count || 0);
     } catch (error) {
       if (error.response?.status === 401) {
         await logout();
@@ -147,9 +152,28 @@ const Dashboard = () => {
     fetchGroups();
   }, [fetchGroups]);
 
+  useEffect(() => {
+    if (!showAddGroup || friendCandidatesLoaded) return;
+
+    let cancelled = false;
+    groupsApi.friendCandidates()
+      .then((response) => {
+        if (!cancelled) {
+          setFriendCandidates(response.data?.friends || []);
+          setFriendCandidatesLoaded(true);
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) console.error('Failed to fetch friend candidates', error);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [showAddGroup, friendCandidatesLoaded]);
+
   const uniqueFriendCandidates = Object.values(
-    groups
-      .flatMap((group) => group.members || [])
+    friendCandidates
       .reduce((accumulator, member) => {
         const email = (member?.email || '').trim().toLowerCase();
         if (!email) return accumulator;
@@ -172,13 +196,11 @@ const Dashboard = () => {
   );
   const searchQuery = groupSearchQuery.trim().toLowerCase();
   const activeGroups = groups
-    .filter((group) => group.status !== 'archived' && !group.archived_at)
     .filter((group) => !searchQuery || group.name.toLowerCase().includes(searchQuery));
-  const archivedGroups = groups
-    .filter((group) => group.status === 'archived' || group.archived_at)
+  const filteredArchivedGroups = archivedGroups
     .filter((group) => !searchQuery || group.name.toLowerCase().includes(searchQuery));
   const isSearching = searchQuery.length > 0;
-  const totalMatchCount = activeGroups.length + archivedGroups.length;
+  const totalMatchCount = activeGroups.length + filteredArchivedGroups.length;
 
   const filteredFriendSuggestions = uniqueFriendCandidates.filter((friend) => {
     if (selectedFriendEmailSet.has(friend.email)) return false;
@@ -234,7 +256,7 @@ const Dashboard = () => {
 
       if (selectedNewGroupFriends.length > 0) {
         const addMemberResults = await Promise.allSettled(
-          selectedNewGroupFriends.map((friend) => groupMembersApi.add(createdGroup.id, friend.email))
+          selectedNewGroupFriends.map((friend) => groupMembersApi.add(createdGroup.id, { email: friend.email }))
         );
 
         const failedAdds = addMemberResults.filter((result) => result.status === 'rejected');
@@ -271,12 +293,36 @@ const Dashboard = () => {
     setSelectedNewGroupFriends((prev) => prev.filter((friend) => friend.email !== email));
   };
 
+  const fetchArchivedGroups = async () => {
+    if (loadingArchivedGroups) return;
+
+    try {
+      setLoadingArchivedGroups(true);
+      setArchivedGroupsError('');
+      const response = await groupsApi.list('archived');
+      const nextArchivedGroups = normalizeGroups(response.data);
+      setArchivedGroups(nextArchivedGroups);
+      setArchivedGroupCount(response.data?.archived_count ?? nextArchivedGroups.length);
+      setArchivedGroupsLoaded(true);
+    } catch (error) {
+      if (error.response?.status === 401) {
+        await logout();
+        return;
+      }
+
+      setArchivedGroupsError('Unable to load archived groups. Please try again.');
+    } finally {
+      setLoadingArchivedGroups(false);
+    }
+  };
+
   const toggleArchivedGroups = () => {
-    setArchivedGroupsCollapsed((prev) => {
-      const nextValue = !prev;
-      localStorage.setItem(ARCHIVED_GROUPS_COLLAPSED_KEY, String(nextValue));
-      return nextValue;
-    });
+    const willExpand = archivedGroupsCollapsed;
+    setArchivedGroupsCollapsed(!willExpand);
+
+    if (willExpand && !archivedGroupsLoaded) {
+      fetchArchivedGroups();
+    }
   };
 
   const currencySymbol = (currency) => (
@@ -387,7 +433,7 @@ const Dashboard = () => {
         </button>
       </div>
 
-      {groups.length > 0 && (
+      {(groups.length > 0 || archivedGroupCount > 0) && (
         <div className="group-search-bar" style={{ marginBottom: '1.5rem' }}>
           <Search size={16} className="group-search-icon" />
           <input
@@ -567,7 +613,7 @@ const Dashboard = () => {
         <div className="text-center" style={{ padding: '3rem', color: 'var(--text-secondary)' }}>
           Loading your groups...
         </div>
-      ) : groups.length === 0 ? (
+      ) : groups.length === 0 && archivedGroupCount === 0 ? (
         <div className="glass-panel text-center animate-fade-in" style={{ padding: '4rem 2rem' }}>
           <Users size={48} style={{ color: 'var(--primary-light)', margin: '0 auto 1rem' }} />
           <h3 className="text-2xl font-bold" style={{ marginBottom: '0.5rem' }}>No groups yet</h3>
@@ -581,7 +627,7 @@ const Dashboard = () => {
             <Plus size={18} /> Create your first group
           </button>
         </div>
-      ) : isSearching && totalMatchCount === 0 ? (
+      ) : isSearching && totalMatchCount === 0 && archivedGroupsLoaded ? (
         <div className="glass-panel text-center animate-fade-in" style={{ padding: '3rem 2rem' }}>
           <Search size={36} style={{ color: 'var(--text-secondary)', margin: '0 auto 1rem' }} />
           <h3 className="text-2xl font-bold" style={{ marginBottom: '0.5rem' }}>No groups found</h3>
@@ -605,7 +651,7 @@ const Dashboard = () => {
             </div>
           ) : null}
 
-          {archivedGroups.length > 0 && (
+          {archivedGroupCount > 0 && (
             <section className="archived-groups-section">
               <button
                 type="button"
@@ -616,14 +662,31 @@ const Dashboard = () => {
                 <span className="archived-groups-heading">
                   <Archive size={18} />
                   <span className="text-xl font-bold">Archived Groups</span>
-                  <span className="archived-groups-count">{archivedGroups.length}</span>
+                  <span className="archived-groups-count">{archivedGroupCount}</span>
                 </span>
                 {archivedGroupsCollapsed ? <ChevronRight size={20} /> : <ChevronDown size={20} />}
               </button>
               {!archivedGroupsCollapsed && (
-                <div className="group-card-grid">
-                  {archivedGroups.map((group) => renderGroupCard(group, true))}
-                </div>
+                loadingArchivedGroups ? (
+                  <div className="text-center" style={{ padding: '1.5rem', color: 'var(--text-secondary)' }}>
+                    Loading archived groups...
+                  </div>
+                ) : archivedGroupsError ? (
+                  <div className="text-center" style={{ padding: '1.25rem' }}>
+                    <div className="error-text" style={{ marginBottom: '0.75rem' }}>{archivedGroupsError}</div>
+                    <button type="button" className="btn btn-secondary" onClick={fetchArchivedGroups}>
+                      Try again
+                    </button>
+                  </div>
+                ) : filteredArchivedGroups.length > 0 ? (
+                  <div className="group-card-grid">
+                    {filteredArchivedGroups.map((group) => renderGroupCard(group, true))}
+                  </div>
+                ) : (
+                  <p className="text-secondary" style={{ padding: '1rem 0 0' }}>
+                    No archived groups match this search.
+                  </p>
+                )
               )}
             </section>
           )}

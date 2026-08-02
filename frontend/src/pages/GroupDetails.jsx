@@ -414,6 +414,7 @@ const GroupDetails = () => {
   const [addMemberError, setAddMemberError] = useState('');
   const [addMemberSuccess, setAddMemberSuccess] = useState('');
   const [memberEmailInput, setMemberEmailInput] = useState('');
+  const [memberNameSearch, setMemberNameSearch] = useState('');
   const [memberPhoneInput, setMemberPhoneInput] = useState('');
   const [memberAddMode, setMemberAddMode] = useState('email'); // 'email' | 'phone'
   const [memberGuestName, setMemberGuestName] = useState('');
@@ -770,6 +771,7 @@ const GroupDetails = () => {
     setAddMemberError('');
     setAddMemberSuccess('');
     setMemberEmailInput('');
+    setMemberNameSearch('');
     setMemberPhoneInput('');
     setMemberAddMode('email');
     setSelectedSuggestedFriend(null);
@@ -789,6 +791,7 @@ const GroupDetails = () => {
     setAddMemberError('');
     setAddMemberSuccess('');
     setMemberEmailInput('');
+    setMemberNameSearch('');
     setMemberPhoneInput('');
     setMemberGuestName('');
     setSelectedSuggestedFriend(null);
@@ -904,7 +907,7 @@ const GroupDetails = () => {
   useEffect(() => {
     if (!showInviteModal) return;
 
-    const query = memberEmailInput.trim();
+    const query = memberNameSearch.trim();
     const normalizedQuery = query.toLowerCase();
 
     if (selectedSuggestedFriend) {
@@ -933,7 +936,7 @@ const GroupDetails = () => {
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [showInviteModal, memberEmailInput, selectedSuggestedFriend, fetchFriendSuggestions]);
+  }, [showInviteModal, memberNameSearch, selectedSuggestedFriend, fetchFriendSuggestions]);
 
   const handleInviteModalBackdropClick = (event) => {
     if (event.target !== event.currentTarget) return;
@@ -1011,7 +1014,8 @@ const GroupDetails = () => {
     if (!friend?.email) return;
 
     setSelectedSuggestedFriend(friend);
-    setMemberEmailInput(friend.name || friend.email);
+    setMemberNameSearch(friend.name || friend.email);
+    setMemberEmailInput('');
     setFriendSuggestions([]);
     setAddMemberError('');
     setAddMemberSuccess('');
@@ -1128,6 +1132,7 @@ const GroupDetails = () => {
       }
 
       setMemberEmailInput('');
+      setMemberNameSearch('');
       setMemberGuestName('');
       setSelectedSuggestedFriend(null);
       setAddMemberSuccess(member?.name ? `${member.name} added to the group` : 'Member added successfully');
@@ -2630,6 +2635,9 @@ const GroupDetails = () => {
                       setAddMemberError('');
                       setAddMemberSuccess('');
                       setMemberGuestName('');
+                      setMemberNameSearch('');
+                      setSelectedSuggestedFriend(null);
+                      setFriendSuggestions([]);
                     }}
                     style={{
                       padding: '0.32rem 0.9rem',
@@ -2657,6 +2665,33 @@ const GroupDetails = () => {
                 ))}
               </div>
 
+              {memberAddMode === 'email' && (
+                <input
+                  type="search"
+                  name="friend_name_search"
+                  value={memberNameSearch}
+                  onChange={(e) => {
+                    setMemberNameSearch(e.target.value);
+                    setSelectedSuggestedFriend(null);
+                    setAddMemberError('');
+                  }}
+                  placeholder="Search existing users by name"
+                  autoComplete="off"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  style={{
+                    width: '100%',
+                    marginBottom: '0.65rem',
+                    background: 'rgba(15, 23, 42, 0.4)',
+                    border: '1px solid var(--surface-border)',
+                    borderRadius: '10px',
+                    padding: '0.62rem 0.78rem',
+                    color: 'var(--text-primary)'
+                  }}
+                  disabled={addingMember}
+                />
+              )}
+
               <form
                 onSubmit={handleAddMember}
                 autoComplete="off"
@@ -2673,9 +2708,11 @@ const GroupDetails = () => {
                     onChange={(e) => {
                       setMemberEmailInput(e.target.value);
                       setSelectedSuggestedFriend(null);
+                      setMemberNameSearch('');
+                      setFriendSuggestions([]);
                       setAddMemberError('');
                     }}
-                    placeholder="Email or name to search"
+                    placeholder="Email address"
                     autoComplete="new-password"
                     autoCorrect="off"
                     autoCapitalize="none"
@@ -2729,7 +2766,7 @@ const GroupDetails = () => {
                   name="guest_display_name"
                   value={memberGuestName}
                   onChange={(e) => setMemberGuestName(e.target.value)}
-                  placeholder={memberAddMode === 'phone' ? 'Display name (required)' : 'Display name (required for new users)'}
+                  placeholder="Display name"
                   autoComplete="off"
                   data-lpignore="true"
                   style={{
@@ -2749,8 +2786,8 @@ const GroupDetails = () => {
               </form>
               <p style={{ marginTop: '0.5rem', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
                 {memberAddMode === 'phone'
-                  ? 'Add a guest by their mobile number. If they sign up later with the same number, their account merges automatically.'
-                  : 'If the email has no TripSplit account, they\'ll be added as a guest (display name required).'}
+                  ? 'If the phone number has no TripSplit account, enter a display name to add them as a guest.'
+                  : 'If the email has no TripSplit account, enter a display name to add them as a guest.'}
               </p>
 
 
@@ -2787,9 +2824,9 @@ const GroupDetails = () => {
                   </div>
                 </div>
               ) : (
-                memberEmailInput.trim() && !selectedSuggestedFriend && (
+                memberNameSearch.trim() && !selectedSuggestedFriend && (
                   <p style={{ color: 'var(--text-secondary)', fontSize: '0.86rem', marginTop: '0.7rem' }}>
-                    No matching friends found for this search.
+                    No existing users found with that name.
                   </p>
                 )
               )}

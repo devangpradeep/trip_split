@@ -307,6 +307,43 @@ class GroupFlowsTest < ActionDispatch::IntegrationTest
     assert_in_delta 0.0,   entry.fetch('current_user_owes'),    0.01
   end
 
+  test 'filtered index returns active groups and the archived count' do
+    active_group = create_group(owner: @owner)
+    archived_group = create_group(owner: @owner)
+    archived_group.update!(archived_at: Time.current)
+
+    get '/api/v1/groups', params: { status: 'active' }, headers: @owner_headers, as: :json
+
+    assert_response :ok
+    body = json_response
+    assert_equal 1, body.fetch('archived_count')
+    assert_equal [active_group.id], body.fetch('groups').map { |group| group.fetch('id') }
+  end
+
+  test 'filtered index returns archived groups only' do
+    create_group(owner: @owner)
+    archived_group = create_group(owner: @owner)
+    archived_group.update!(archived_at: Time.current)
+
+    get '/api/v1/groups', params: { status: 'archived' }, headers: @owner_headers, as: :json
+
+    assert_response :ok
+    assert_equal [archived_group.id], json_response.fetch('groups').map { |group| group.fetch('id') }
+  end
+
+  test 'friend candidates include users from archived shared groups but exclude outsiders' do
+    archived_group = create_group(owner: @owner, members: [@member])
+    archived_group.update!(archived_at: Time.current)
+
+    get '/api/v1/groups/friend_candidates', headers: @owner_headers, as: :json
+
+    assert_response :ok
+    ids = json_response.fetch('friends').map { |friend| friend.fetch('id') }
+    assert_includes ids, @member.id
+    assert_not_includes ids, @owner.id
+    assert_not_includes ids, @outsider.id
+  end
+
   # ── BALANCES ─────────────────────────────────────────────────────────────────
 
   test 'balances endpoint returns correct calculator result for each member' do
