@@ -20,7 +20,8 @@ import {
   Image,
   ChevronDown,
   Mail,
-  Phone
+  Phone,
+  Search
 } from 'lucide-react';
 import NotificationBell from '../components/NotificationBell';
 
@@ -416,7 +417,7 @@ const GroupDetails = () => {
   const [memberEmailInput, setMemberEmailInput] = useState('');
   const [memberNameSearch, setMemberNameSearch] = useState('');
   const [memberPhoneInput, setMemberPhoneInput] = useState('');
-  const [memberAddMode, setMemberAddMode] = useState('email'); // 'email' | 'phone'
+  const [memberAddMode, setMemberAddMode] = useState('search'); // 'search' | 'email' | 'phone'
   const [memberGuestName, setMemberGuestName] = useState('');
   const [selectedSuggestedFriend, setSelectedSuggestedFriend] = useState(null);
   const [addingMember, setAddingMember] = useState(false);
@@ -773,7 +774,7 @@ const GroupDetails = () => {
     setMemberEmailInput('');
     setMemberNameSearch('');
     setMemberPhoneInput('');
-    setMemberAddMode('email');
+    setMemberAddMode('search');
     setSelectedSuggestedFriend(null);
     setFriendSuggestionError('');
     setFriendSuggestions([]);
@@ -905,7 +906,7 @@ const GroupDetails = () => {
   };
 
   useEffect(() => {
-    if (!showInviteModal) return;
+    if (!showInviteModal || memberAddMode !== 'search') return;
 
     const query = memberNameSearch.trim();
     const normalizedQuery = query.toLowerCase();
@@ -936,7 +937,7 @@ const GroupDetails = () => {
     return () => {
       window.clearTimeout(timeoutId);
     };
-  }, [showInviteModal, memberNameSearch, selectedSuggestedFriend, fetchFriendSuggestions]);
+  }, [showInviteModal, memberAddMode, memberNameSearch, selectedSuggestedFriend, fetchFriendSuggestions]);
 
   const handleInviteModalBackdropClick = (event) => {
     if (event.target !== event.currentTarget) return;
@@ -1088,16 +1089,25 @@ const GroupDetails = () => {
       return;
     }
 
-    // ── Email mode (existing behaviour) ──────────────────────────────────────
-    const normalizedEmail = (selectedSuggestedFriend?.email || memberEmailInput).trim().toLowerCase();
+    if (memberAddMode === 'search' && !selectedSuggestedFriend?.email) {
+      setAddMemberError('Search for a user and select them from the suggestions');
+      setAddMemberSuccess('');
+      return;
+    }
+
+    // Search mode resolves the selected user to their email. Email mode uses
+    // the explicitly entered address and may create a guest when no user exists.
+    const normalizedEmail = (
+      memberAddMode === 'search' ? selectedSuggestedFriend.email : memberEmailInput
+    ).trim().toLowerCase();
     if (!normalizedEmail) {
-      setAddMemberError('Type a name and select a user, or enter an email address');
+      setAddMemberError('Enter an email address');
       setAddMemberSuccess('');
       return;
     }
 
     if (!isValidEmail(normalizedEmail)) {
-      setAddMemberError('Select a user from suggestions or enter a valid email address');
+      setAddMemberError('Enter a valid email address');
       setAddMemberSuccess('');
       return;
     }
@@ -1118,7 +1128,7 @@ const GroupDetails = () => {
 
       const response = await groupMembersApi.add(id, {
         email: normalizedEmail,
-        name: memberGuestName.trim() || undefined
+        name: memberAddMode === 'email' ? memberGuestName.trim() || undefined : undefined
       });
       const member = response.data?.member;
 
@@ -1584,6 +1594,11 @@ const GroupDetails = () => {
     if (!person.email) return false;
     return !existingMemberEmails.has(person.email.toLowerCase());
   });
+  const memberIdentifierReady = memberAddMode === 'search'
+    ? Boolean(selectedSuggestedFriend?.email)
+    : memberAddMode === 'email'
+      ? isValidEmail(memberEmailInput)
+      : /^\d{10}$/.test(memberPhoneInput);
   const currentUserSettlementSuggestions = suggestedSettlements
     .filter((settlement) => settlement.from.id === user.id);
   // Amount the current user can pay to a specific recipient, from backend's suggested list.
@@ -2618,15 +2633,19 @@ const GroupDetails = () => {
           <div className="glass-panel animate-fade-in modal-card" style={{ width: '100%', maxWidth: 640, maxHeight: '90vh', overflowY: 'auto' }}>
             <h3 style={{ marginBottom: '0.5rem' }}>Invite Members</h3>
             <p style={{ color: 'var(--text-secondary)', fontSize: '0.92rem', marginBottom: '1rem' }}>
-              Type a name to search people you already traveled with, then add them to this group.
+              Search for someone you know, add them by email or phone, or share an invite link.
             </p>
 
             <div className="glass-panel" style={{ padding: '0.95rem 1rem', marginBottom: '1rem' }}>
               <h4 style={{ marginBottom: '0.6rem', fontSize: '1rem' }}>Add Friends</h4>
 
               {/* Mode toggle */}
-              <div style={{ display: 'flex', gap: '0.4rem', marginBottom: '0.8rem' }}>
-                {['email', 'phone'].map((mode) => (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem', marginBottom: '0.8rem' }}>
+                {[
+                  { value: 'search', label: 'Search user' },
+                  { value: 'email', label: 'Email' },
+                  { value: 'phone', label: 'Phone' }
+                ].map(({ value: mode, label }) => (
                   <button
                     key={mode}
                     type="button"
@@ -2635,9 +2654,13 @@ const GroupDetails = () => {
                       setAddMemberError('');
                       setAddMemberSuccess('');
                       setMemberGuestName('');
+                      setMemberEmailInput('');
+                      setMemberPhoneInput('');
                       setMemberNameSearch('');
                       setSelectedSuggestedFriend(null);
                       setFriendSuggestions([]);
+                      setFriendSuggestionError('');
+                      setLoadingFriendSuggestions(false);
                     }}
                     style={{
                       padding: '0.32rem 0.9rem',
@@ -2659,38 +2682,13 @@ const GroupDetails = () => {
                     }}
                     disabled={addingMember}
                   >
-                    {mode === 'email' ? <Mail size={16} strokeWidth={2} /> : <Phone size={16} strokeWidth={2} />}
-                    <span>{mode === 'email' ? 'Email' : 'Phone'}</span>
+                    {mode === 'search' && <Search size={16} strokeWidth={2} />}
+                    {mode === 'email' && <Mail size={16} strokeWidth={2} />}
+                    {mode === 'phone' && <Phone size={16} strokeWidth={2} />}
+                    <span>{label}</span>
                   </button>
                 ))}
               </div>
-
-              {memberAddMode === 'email' && (
-                <input
-                  type="search"
-                  name="friend_name_search"
-                  value={memberNameSearch}
-                  onChange={(e) => {
-                    setMemberNameSearch(e.target.value);
-                    setSelectedSuggestedFriend(null);
-                    setAddMemberError('');
-                  }}
-                  placeholder="Search existing users by name"
-                  autoComplete="off"
-                  autoCorrect="off"
-                  spellCheck={false}
-                  style={{
-                    width: '100%',
-                    marginBottom: '0.65rem',
-                    background: 'rgba(15, 23, 42, 0.4)',
-                    border: '1px solid var(--surface-border)',
-                    borderRadius: '10px',
-                    padding: '0.62rem 0.78rem',
-                    color: 'var(--text-primary)'
-                  }}
-                  disabled={addingMember}
-                />
-              )}
 
               <form
                 onSubmit={handleAddMember}
@@ -2700,16 +2698,38 @@ const GroupDetails = () => {
                 className="flex gap-2 items-center"
                 style={{ flexWrap: 'wrap' }}
               >
-                {memberAddMode === 'email' ? (
+                {memberAddMode === 'search' ? (
+                  <input
+                    type="search"
+                    name="friend_name_search"
+                    value={memberNameSearch}
+                    onChange={(e) => {
+                      setMemberNameSearch(e.target.value);
+                      setSelectedSuggestedFriend(null);
+                      setAddMemberError('');
+                    }}
+                    placeholder="Search existing users by name"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    style={{
+                      flex: 1,
+                      minWidth: '240px',
+                      background: 'rgba(15, 23, 42, 0.4)',
+                      border: '1px solid var(--surface-border)',
+                      borderRadius: '10px',
+                      padding: '0.62rem 0.78rem',
+                      color: 'var(--text-primary)'
+                    }}
+                    disabled={addingMember}
+                  />
+                ) : memberAddMode === 'email' ? (
                   <input
                     type="search"
                     name="friend_lookup_query"
                     value={memberEmailInput}
                     onChange={(e) => {
                       setMemberEmailInput(e.target.value);
-                      setSelectedSuggestedFriend(null);
-                      setMemberNameSearch('');
-                      setFriendSuggestions([]);
                       setAddMemberError('');
                     }}
                     placeholder="Email address"
@@ -2761,44 +2781,52 @@ const GroupDetails = () => {
                     disabled={addingMember}
                   />
                 )}
-                <input
-                  type="text"
-                  name="guest_display_name"
-                  value={memberGuestName}
-                  onChange={(e) => setMemberGuestName(e.target.value)}
-                  placeholder="Display name"
-                  autoComplete="off"
-                  data-lpignore="true"
-                  style={{
-                    flex: 1,
-                    minWidth: '180px',
-                    background: 'rgba(15, 23, 42, 0.4)',
-                    border: '1px solid var(--surface-border)',
-                    borderRadius: '10px',
-                    padding: '0.62rem 0.78rem',
-                    color: 'var(--text-primary)'
-                  }}
-                  disabled={addingMember}
-                />
-                <button type="submit" className="btn btn-primary" disabled={addingMember}>
+                {memberAddMode !== 'search' && (
+                  <input
+                    type="text"
+                    name="guest_display_name"
+                    value={memberGuestName}
+                    onChange={(e) => setMemberGuestName(e.target.value)}
+                    placeholder="Display name"
+                    autoComplete="off"
+                    data-lpignore="true"
+                    style={{
+                      flex: 1,
+                      minWidth: '180px',
+                      background: 'rgba(15, 23, 42, 0.4)',
+                      border: '1px solid var(--surface-border)',
+                      borderRadius: '10px',
+                      padding: '0.62rem 0.78rem',
+                      color: 'var(--text-primary)'
+                    }}
+                    disabled={addingMember}
+                  />
+                )}
+                <button
+                  type="submit"
+                  className="btn btn-primary"
+                  disabled={addingMember || !memberIdentifierReady}
+                >
                   {addingMember ? 'Adding...' : 'Add Member'}
                 </button>
               </form>
               <p style={{ marginTop: '0.5rem', fontSize: '0.78rem', color: 'var(--text-secondary)' }}>
-                {memberAddMode === 'phone'
+                {memberAddMode === 'search'
+                  ? 'Search people you\'ve previously shared a group with.'
+                  : memberAddMode === 'phone'
                   ? 'If the phone number has no TripSplit account, enter a display name to add them as a guest.'
                   : 'If the email has no TripSplit account, enter a display name to add them as a guest.'}
               </p>
 
 
-              {selectedSuggestedFriend && (
+              {memberAddMode === 'search' && selectedSuggestedFriend && (
                 <div style={{ marginTop: '0.55rem', fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
                   Selected: <span style={{ color: 'var(--text-primary)' }}>{selectedSuggestedFriend.name || selectedSuggestedFriend.email}</span>
                   <span style={{ marginLeft: '0.35rem' }}>({selectedSuggestedFriend.email})</span>
                 </div>
               )}
 
-              {loadingFriendSuggestions ? (
+              {memberAddMode === 'search' && (loadingFriendSuggestions ? (
                 <p style={{ color: 'var(--text-secondary)', fontSize: '0.86rem', marginTop: '0.7rem' }}>
                   Searching friends...
                 </p>
@@ -2829,7 +2857,7 @@ const GroupDetails = () => {
                     No existing users found with that name.
                   </p>
                 )
-              )}
+              ))}
 
               {addMemberError && <div className="error-text" style={{ marginTop: '0.7rem' }}>{addMemberError}</div>}
               {addMemberSuccess && <div style={{ marginTop: '0.7rem', color: 'var(--success-color)', fontSize: '0.9rem' }}>{addMemberSuccess}</div>}
