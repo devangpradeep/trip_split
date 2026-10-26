@@ -219,7 +219,10 @@ const Dashboard = () => {
   const emailFriendOption = (
     isValidEmail(trimmedQuery) &&
     !selectedFriendEmailSet.has(trimmedQuery.toLowerCase())
-  ) ? { id: null, name: '', email: trimmedQuery.toLowerCase() } : null;
+  ) ? (
+    uniqueFriendCandidates.find((friend) => friend.email === trimmedQuery.toLowerCase()) ||
+    { id: null, name: '', email: trimmedQuery.toLowerCase() }
+  ) : null;
 
   const handleCreateGroup = async (e) => {
     e.preventDefault();
@@ -228,6 +231,12 @@ const Dashboard = () => {
     const groupName = newGroupName.trim();
     if (!groupName) {
       setGroupNameError('Group name is required');
+      return;
+    }
+
+    const unnamedFriend = selectedNewGroupFriends.find((friend) => !friend.name?.trim());
+    if (unnamedFriend) {
+      setCreateGroupError(`Enter a display name for ${unnamedFriend.email}`);
       return;
     }
 
@@ -256,12 +265,19 @@ const Dashboard = () => {
 
       if (selectedNewGroupFriends.length > 0) {
         const addMemberResults = await Promise.allSettled(
-          selectedNewGroupFriends.map((friend) => groupMembersApi.add(createdGroup.id, { email: friend.email }))
+          selectedNewGroupFriends.map((friend) => groupMembersApi.add(createdGroup.id, {
+            email: friend.email,
+            name: friend.name.trim()
+          }))
         );
 
-        const failedAdds = addMemberResults.filter((result) => result.status === 'rejected');
-        if (failedAdds.length > 0) {
-          setCreateGroupError('Group created, but some friends could not be added.');
+        const failedFriends = selectedNewGroupFriends.filter((_friend, index) => (
+          addMemberResults[index].status === 'rejected'
+        ));
+        if (failedFriends.length > 0) {
+          setCreateGroupError(
+            `Group "${groupName}" was created, but these friends could not be added: ${failedFriends.map((friend) => friend.email).join(', ')}. Open the group to add them.`
+          );
         }
       }
 
@@ -519,6 +535,7 @@ const Dashboard = () => {
                 name="create_group_friend_lookup"
                 value={newGroupFriendQuery}
                 onChange={(e) => setNewGroupFriendQuery(e.target.value)}
+                disabled={creatingGroup}
                 placeholder="Search by name or enter any email address"
                 autoComplete="new-password"
                 autoCorrect="off"
@@ -571,6 +588,7 @@ const Dashboard = () => {
                     className="create-group-selected-friend-chip"
                     onClick={() => handleRemoveSelectedFriend(friend.email)}
                     title="Remove"
+                    disabled={creatingGroup}
                   >
                     {friend.name
                       ? <><span>{friend.name}</span><span className="chip-email-sub">{friend.email}</span></>
@@ -581,9 +599,27 @@ const Dashboard = () => {
                 ))}
               </div>
             )}
-            {createGroupError && (
-              <div className="error-text create-group-error-text">{createGroupError}</div>
-            )}
+            {selectedNewGroupFriends.filter((friend) => !friend.id).map((friend) => (
+              <div key={friend.email} className="form-group create-group-guest-name-field" style={{ margin: 0 }}>
+                <label htmlFor={`new-group-friend-name-${friend.email}`}>
+                  Display name for {friend.email}
+                </label>
+                <input
+                  id={`new-group-friend-name-${friend.email}`}
+                  type="text"
+                  required
+                  value={friend.name}
+                  placeholder="e.g., Alex"
+                  disabled={creatingGroup}
+                  onChange={(e) => {
+                    const name = e.target.value;
+                    setSelectedNewGroupFriends((prev) => prev.map((selectedFriend) => (
+                      selectedFriend.email === friend.email ? { ...selectedFriend, name } : selectedFriend
+                    )));
+                  }}
+                />
+              </div>
+            ))}
             <div className="create-group-actions">
               <button type="submit" className="btn btn-primary create-group-submit-btn" disabled={creatingGroup}>
                 {creatingGroup ? 'Creating...' : 'Create'}
@@ -607,6 +643,10 @@ const Dashboard = () => {
             </div>
           </form>
         </div>
+      )}
+
+      {createGroupError && (
+        <div role="alert" className="error-text create-group-error-text">{createGroupError}</div>
       )}
 
       {loading ? (

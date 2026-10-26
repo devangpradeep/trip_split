@@ -1853,7 +1853,8 @@ body.app-installed {
   margin: 0.35rem 0 0;
 }
 
-.create-group-description-field {
+.create-group-description-field,
+.create-group-guest-name-field {
   grid-column: 1 / -1;
 }
 
@@ -2006,8 +2007,7 @@ body.app-installed {
 }
 
 .create-group-error-text {
-  grid-column: 1 / -1;
-  margin: 0;
+  margin: 0 0 1rem;
 }
 
 @media (max-width: 900px) {
