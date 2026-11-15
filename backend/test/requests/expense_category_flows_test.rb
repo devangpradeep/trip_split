@@ -15,10 +15,17 @@ class ExpenseCategoryFlowsTest < ActionDispatch::IntegrationTest
     examples = {
       'DIESEL at Shell' => 'fuel',
       'Dinner at the café' => 'food_and_drink',
+      'Masala tea' => 'food_and_drink',
+      'Beer and cocktails' => 'food_and_drink',
+      'Whisky' => 'food_and_drink',
       'Train tickets' => 'transport',
       'Museum tickets' => 'activities',
+      'Humayun’s Tomb tickets' => 'activities',
+      'Mysore Palace entry' => 'activities',
+      'Red Fort entry' => 'activities',
       'Guest-house booking' => 'accommodation',
       'Tickets' => nil,
+      'Team outing' => nil,
       'Dieselgate' => nil,
       'Fuel and parking' => nil
     }
