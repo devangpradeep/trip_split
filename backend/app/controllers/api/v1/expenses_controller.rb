@@ -9,7 +9,7 @@ module Api
 
       before_action :authenticate_user!
       before_action :set_group
-      before_action :ensure_active_group!, only: %i[create update destroy remove_receipt]
+      before_action :ensure_active_group!, only: %i[create update destroy remove_receipt category_suggestion]
       before_action :set_expense, only: %i[show update destroy remove_receipt]
       before_action :ensure_can_edit_expense!, only: %i[update remove_receipt]
       before_action :ensure_can_delete_expense!, only: %i[destroy]
@@ -22,7 +22,9 @@ module Api
       end
 
       def create
-        @expense = @group.expenses.build(expense_params)
+        attributes = expense_params
+        @expense = @group.expenses.build(attributes)
+        @expense.category = Expenses::CategorySuggester.call(@expense.description) unless attributes.key?(:category)
         @expense.split_type = normalized_split_type
         @expense.created_by = current_user
 
@@ -39,6 +41,10 @@ module Api
         rescue ActiveRecord::RecordInvalid
           render json: { errors: @expense.errors.full_messages }, status: :unprocessable_entity
         end
+      end
+
+      def category_suggestion
+        render json: { category: Expenses::CategorySuggester.call(params[:description]) }
       end
 
       def show

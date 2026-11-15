@@ -38,6 +38,10 @@ Rails.application.routes.draw do
         end
 
         resources :expenses, only: %i[index create show update destroy] do
+          collection do
+            post :category_suggestion
+          end
+
           member do
             delete :remove_receipt
           end

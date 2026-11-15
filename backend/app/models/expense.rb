@@ -8,6 +8,8 @@ class Expense < ApplicationRecord
 
   has_one_attached :receipt
 
+  normalizes :category, with: :presence.to_proc
+
   validates :description, presence: true
   validates :amount, presence: true, numericality: { greater_than: 0 }
   validates :currency, presence: true

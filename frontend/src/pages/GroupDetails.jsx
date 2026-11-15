@@ -23,7 +23,9 @@ import {
   Phone,
   Search
 } from 'lucide-react';
+import CustomSelect from '../components/CustomSelect';
 import NotificationBell from '../components/NotificationBell';
+import { ExpenseCategoryIcon, ExpenseDescriptionField } from '../components/ExpenseCategory';
 
 const todayISO = () => {
   const date = new Date();
@@ -162,68 +164,6 @@ const buildDefaultExpenseForm = (members = [], paidById = '') => ({
     percentage: ''
   }))
 });
-
-const CustomSelect = ({ value, options, onChange, disabled = false }) => {
-  const [open, setOpen] = useState(false);
-  const rootRef = useRef(null);
-  const selectedOption = options.find((option) => option.value === value);
-
-  useEffect(() => {
-    const handleDocumentClick = (event) => {
-      if (!rootRef.current?.contains(event.target)) {
-        setOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleDocumentClick);
-    return () => document.removeEventListener('mousedown', handleDocumentClick);
-  }, []);
-
-  useEffect(() => {
-    const handleEscape = (event) => {
-      if (event.key === 'Escape') {
-        setOpen(false);
-      }
-    };
-
-    document.addEventListener('keydown', handleEscape);
-    return () => document.removeEventListener('keydown', handleEscape);
-  }, []);
-
-  return (
-    <div ref={rootRef} className={`custom-select ${open ? 'open' : ''}`}>
-      <button
-        type="button"
-        className="custom-select-trigger"
-        onClick={() => {
-          if (disabled) return;
-          setOpen((prev) => !prev);
-        }}
-        disabled={disabled}
-      >
-        <span>{selectedOption?.label || 'Select'}</span>
-        <span className="custom-select-caret">▾</span>
-      </button>
-      {open && (
-        <div className="custom-select-menu">
-          {options.map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              className={`custom-select-option ${option.value === value ? 'active' : ''}`}
-              onClick={() => {
-                onChange(option.value);
-                setOpen(false);
-              }}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
 
 const CustomDateInput = ({ value, onChange, required = false, disabled = false }) => {
   const [displayValue, setDisplayValue] = useState(formatISODateForUI(value));
@@ -622,6 +562,7 @@ const GroupDetails = () => {
 
       const expenseData = {
         description: expenseForm.description,
+        ...(expenseForm.category !== undefined && { category: expenseForm.category }),
         amount: expenseForm.amount,
         date: expenseForm.date,
         currency: group.currency,
@@ -1219,6 +1160,7 @@ const GroupDetails = () => {
     setEditReceiptFile(null);
     setEditExpenseForm({
       description: expense.description || '',
+      savedCategory: expense.category,
       amount: parseFloat(expense.amount || 0).toFixed(2),
       date: expense.date || new Date().toISOString().split('T')[0],
       split_type: uiSplitType || 'equal',
@@ -1318,6 +1260,7 @@ const GroupDetails = () => {
 
       const expenseData = {
         description: editExpenseForm.description,
+        ...(editExpenseForm.category !== undefined && { category: editExpenseForm.category }),
         amount: editExpenseForm.amount,
         date: editExpenseForm.date,
         currency: group.currency,
@@ -1844,15 +1787,14 @@ const GroupDetails = () => {
             <div className="glass-panel animate-fade-in">
               <h3 style={{ marginBottom: '1rem' }}>Add New Expense</h3>
               <form onSubmit={handleAddExpense} className="flex flex-col expense-form-panel">
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <label>Description</label>
-                  <input
-                    required
-                    placeholder="e.g. Dinner at Cafe"
-                    value={expenseForm.description}
-                    onChange={(e) => setExpenseForm((prev) => ({ ...prev, description: e.target.value }))}
-                  />
-                </div>
+                <ExpenseDescriptionField
+                  description={expenseForm.description}
+                  onDescriptionChange={(description) => setExpenseForm((prev) => ({ ...prev, description }))}
+                  category={expenseForm.category}
+                  onCategoryChange={(category) => setExpenseForm((prev) => ({ ...prev, category }))}
+                  suggestForGroupId={id}
+                  placeholder="e.g. Dinner at Cafe"
+                />
                 <div className="form-group expense-paid-by-field" style={{ marginBottom: 0 }}>
                   <label>Who paid?</label>
                   <CustomSelect
@@ -2020,9 +1962,7 @@ const GroupDetails = () => {
               expenses.map(expense => (
                 <div key={expense.id} className="glass-panel expense-row expense-row-compact">
                   <div className="flex items-center gap-4 expense-main">
-                    <div className="expense-icon-wrap">
-                      <Receipt size={24} color="var(--primary-color)" />
-                    </div>
+                    <ExpenseCategoryIcon category={expense.category} />
                     <div>
                       <div className="expense-title">{expense.description}</div>
                       <div className="expense-subtitle">
@@ -2238,14 +2178,13 @@ const GroupDetails = () => {
           <div className="glass-panel animate-fade-in modal-card" style={{ width: '100%', maxWidth: 760, maxHeight: '90vh', overflowY: 'auto' }}>
             <h3 style={{ marginBottom: '1rem' }}>Edit Expense</h3>
             <form onSubmit={handleUpdateExpense} className="flex flex-col expense-form-panel">
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <label>Description</label>
-                <input
-                  required
-                  value={editExpenseForm.description}
-                  onChange={(e) => setEditExpenseForm((prev) => ({ ...prev, description: e.target.value }))}
-                />
-              </div>
+              <ExpenseDescriptionField
+                description={editExpenseForm.description}
+                onDescriptionChange={(description) => setEditExpenseForm((prev) => ({ ...prev, description }))}
+                category={editExpenseForm.category}
+                onCategoryChange={(category) => setEditExpenseForm((prev) => ({ ...prev, category }))}
+                savedCategory={editExpenseForm.savedCategory}
+              />
               <div className="form-group expense-paid-by-field" style={{ marginBottom: 0 }}>
                 <label>Who paid?</label>
                 <CustomSelect
