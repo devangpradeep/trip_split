@@ -99,6 +99,22 @@ bin/rails test test/requests
 
 The complete planned coverage is documented in `API_TEST_SCENARIOS.md`.
 
+## Backfill expense categories
+
+Run the preview against the target environment to see counts by proposed category.
+
+```bash
+bin/rails expenses:backfill_categories
+```
+
+Apply the assignments after reviewing the counts.
+
+```bash
+bin/rails 'expenses:backfill_categories[apply]'
+```
+
+Each run uses its start time as the cutoff and considers blank categories on expenses last updated before then, including expenses in archived groups. Expenses with ambiguous or unrecognized descriptions stay uncategorized.
+
 ## Dev Notes
 - CORS is configured via `CORS_ALLOWED_ORIGINS` in `config/initializers/cors.rb`.
 - Current app is API-only with Devise configured for JSON auth flows.

@@ -136,6 +136,12 @@ export const groupMembersApi = {
   })
 };
 
+export const expensesApi = {
+  suggestCategory: (groupId, description, signal) => api.post(
+    `/groups/${groupId}/expenses/category_suggestion`, { description }, { signal }
+  )
+};
+
 export const groupInvitesApi = {
   list: (groupId) => api.get(`/groups/${groupId}/invites`),
   create: (groupId, { expiresInHours = 48, noExpiry = false } = {}) => api.post(`/groups/${groupId}/invites`, {
