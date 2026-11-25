@@ -3041,21 +3041,21 @@ const GroupDetails = () => {
 
         return (
           <div className="modal-overlay">
-            <div className="settle-modal-card glass-panel animate-fade-in modal-card">
+            <div className="form-modal-card glass-panel animate-fade-in modal-card">
 
               {/* ── Header ── */}
-              <div className="settle-modal-header">
+              <div className="form-modal-header">
                 <div>
                   {settleForm.from_user_id ? (
                     <>
-                      <h3 className="settle-modal-title">Settle for Guest</h3>
+                      <h3 className="form-modal-title">Settle for Guest</h3>
                       <p className="settle-modal-subtitle">
                         <strong>{guestName}</strong> has {currencySym}{outstandingPaymentTotal.toFixed(2)} remaining to pay — choose who received the cash
                       </p>
                     </>
                   ) : (
                     <>
-                      <h3 className="settle-modal-title">Settle Up</h3>
+                      <h3 className="form-modal-title">Settle Up</h3>
                       <p className="settle-modal-subtitle">
                         You have {currencySym}{outstandingPaymentTotal.toFixed(2)} remaining to pay — choose who you paid.
                       </p>
@@ -3077,9 +3077,9 @@ const GroupDetails = () => {
                 </div>
               </div>
 
-              <div className="settle-modal-divider" />
+              <div className="form-modal-divider" />
 
-              <form onSubmit={handleSettlePayment} className="settle-modal-body">
+              <form onSubmit={handleSettlePayment} className="form-modal-body">
 
                 {/* Pay To */}
                 <div className="form-group settle-form-group">
@@ -3193,19 +3193,19 @@ const GroupDetails = () => {
                 {settleError && <div className="error-text" style={{ margin: 0 }}>{settleError}</div>}
 
                 {/* Actions */}
-                <div className="settle-modal-actions">
+                <div className="form-modal-actions">
                   {!upiPaymentFired ? (
                     <>
                       <button
                         type="submit"
-                        className="btn btn-secondary settle-action-btn"
+                        className="btn btn-secondary"
                         disabled={settlingPayment}
                       >
                         {settlingPayment ? 'Recording…' : canUseUpi ? 'Paid Externally' : 'Record Settlement'}
                       </button>
                       <button
                         type="button"
-                        className="btn btn-ghost settle-action-btn"
+                        className="btn btn-ghost"
                         onClick={() => {
                           if (settlingPayment) return;
                           setShowSettleModal(false);
@@ -3221,14 +3221,14 @@ const GroupDetails = () => {
                     <>
                       <button
                         type="submit"
-                        className="btn btn-primary settle-action-btn"
+                        className="btn btn-primary"
                         disabled={settlingPayment}
                       >
                         {settlingPayment ? 'Recording…' : 'Confirm & Record'}
                       </button>
                       <button
                         type="button"
-                        className="btn btn-ghost settle-action-btn"
+                        className="btn btn-ghost"
                         onClick={() => {
                           setUpiPaymentFired(false);
                           setSettleError('');
