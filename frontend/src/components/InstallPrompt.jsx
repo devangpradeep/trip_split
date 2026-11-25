@@ -28,7 +28,7 @@ const getInitialPromptState = () => {
   };
 };
 
-const InstallPrompt = () => {
+const InstallPrompt = ({ enabled = true }) => {
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [promptState, setPromptState] = useState(getInitialPromptState);
   const { showPrompt, iosMode } = promptState;
@@ -84,7 +84,7 @@ const InstallPrompt = () => {
     setPromptState((current) => ({ ...current, showPrompt: false }));
   };
 
-  if (!showPrompt) return null;
+  if (!enabled || !showPrompt) return null;
 
   return (
     <div className="install-prompt" role="dialog" aria-live="polite" aria-label="Install Tripsplit">

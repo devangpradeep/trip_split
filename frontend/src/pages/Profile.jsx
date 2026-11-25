@@ -15,6 +15,7 @@ import {
 import { profileApi } from '../lib/api';
 import { useAuth } from '../contexts/useAuth';
 import NotificationBell from '../components/NotificationBell';
+import ThemePreference from '../components/ThemePreference';
 import {
   devicePushConfigured,
   devicePushSupported,
@@ -416,6 +417,7 @@ const Profile = () => {
             <h2>{displayName}</h2>
             <p>{profile?.email}</p>
           </div>
+          <ThemePreference />
         </section>
 
         <form onSubmit={handleSave} className="profile-details-stack">

@@ -1425,7 +1425,7 @@ const GroupDetails = () => {
             )}
             {outgoingTotal > 0.01 && !isCurrentUser && isGuest && isAdmin && !isArchived && (
               <button
-                className="btn btn-secondary guest-settle-btn balance-settle-btn"
+                className="btn btn-secondary balance-settle-btn"
                 onClick={() => openSettleForGuestModal(balanceData)}
                 title={`Settle on behalf of ${balanceData.user.name}`}
               >
@@ -2603,7 +2603,7 @@ const GroupDetails = () => {
                     }}
                     style={{
                       padding: '0.32rem 0.9rem',
-                      borderRadius: '8px',
+                      borderRadius: 'var(--radius-chip)',
                       border: '1px solid',
                       display: 'inline-flex',
                       alignItems: 'center',
@@ -2615,9 +2615,9 @@ const GroupDetails = () => {
                       transition: 'all 0.18s ease',
                       borderColor: memberAddMode === mode ? 'var(--primary-color)' : 'var(--surface-border)',
                       background: memberAddMode === mode
-                        ? 'linear-gradient(135deg, rgba(99,102,241,0.88), rgba(79,70,229,0.92))'
-                        : 'rgba(255,255,255,0.04)',
-                      color: memberAddMode === mode ? '#fff' : 'var(--text-secondary)'
+                        ? 'var(--action-fill)'
+                        : 'var(--surface-wash)',
+                      color: memberAddMode === mode ? 'var(--on-primary)' : 'var(--text-secondary)'
                     }}
                     disabled={addingMember}
                   >
@@ -2654,9 +2654,9 @@ const GroupDetails = () => {
                     style={{
                       flex: 1,
                       minWidth: '240px',
-                      background: 'rgba(15, 23, 42, 0.4)',
-                      border: '1px solid var(--surface-border)',
-                      borderRadius: '10px',
+                      background: 'var(--input-bg)',
+                      border: 'var(--border-width) solid var(--input-border)',
+                      borderRadius: 'var(--radius-inset)',
                       padding: '0.62rem 0.78rem',
                       color: 'var(--text-primary)'
                     }}
@@ -2684,9 +2684,9 @@ const GroupDetails = () => {
                     style={{
                       flex: 1,
                       minWidth: '200px',
-                      background: 'rgba(15, 23, 42, 0.4)',
-                      border: '1px solid var(--surface-border)',
-                      borderRadius: '10px',
+                      background: 'var(--input-bg)',
+                      border: 'var(--border-width) solid var(--input-border)',
+                      borderRadius: 'var(--radius-inset)',
                       padding: '0.62rem 0.78rem',
                       color: 'var(--text-primary)'
                     }}
@@ -2711,9 +2711,9 @@ const GroupDetails = () => {
                     style={{
                       flex: 1,
                       minWidth: '200px',
-                      background: 'rgba(15, 23, 42, 0.4)',
-                      border: '1px solid var(--surface-border)',
-                      borderRadius: '10px',
+                      background: 'var(--input-bg)',
+                      border: 'var(--border-width) solid var(--input-border)',
+                      borderRadius: 'var(--radius-inset)',
                       padding: '0.62rem 0.78rem',
                       color: 'var(--text-primary)'
                     }}
@@ -2732,9 +2732,9 @@ const GroupDetails = () => {
                     style={{
                       flex: 1,
                       minWidth: '180px',
-                      background: 'rgba(15, 23, 42, 0.4)',
-                      border: '1px solid var(--surface-border)',
-                      borderRadius: '10px',
+                      background: 'var(--input-bg)',
+                      border: 'var(--border-width) solid var(--input-border)',
+                      borderRadius: 'var(--radius-inset)',
                       padding: '0.62rem 0.78rem',
                       color: 'var(--text-primary)'
                     }}
@@ -2890,9 +2890,9 @@ const GroupDetails = () => {
                           style={{
                             flex: 1,
                             minWidth: '220px',
-                            background: 'rgba(15, 23, 42, 0.4)',
-                            border: '1px solid var(--surface-border)',
-                            borderRadius: '10px',
+                            background: 'var(--input-bg)',
+                            border: 'var(--border-width) solid var(--input-border)',
+                            borderRadius: 'var(--radius-inset)',
                             padding: '0.62rem 0.78rem',
                             color: 'var(--text-primary)'
                           }}
