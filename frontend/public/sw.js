@@ -1,6 +1,6 @@
-const APP_SHELL_CACHE = 'tripsplit-shell-v2';
-const RUNTIME_CACHE = 'tripsplit-runtime-v2';
-const APP_SHELL_ASSETS = ['/', '/index.html', '/manifest.webmanifest', '/favicon.svg', '/icons/icon-192.svg'];
+const APP_SHELL_CACHE = 'tripsplit-shell-v3';
+const RUNTIME_CACHE = 'tripsplit-runtime-v3';
+const APP_SHELL_ASSETS = ['/', '/index.html', '/manifest.webmanifest', '/theme.js', '/favicon.svg', '/icons/icon-192.svg'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(

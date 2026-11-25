@@ -655,7 +655,7 @@ const Dashboard = () => {
         </div>
       ) : groups.length === 0 && archivedGroupCount === 0 ? (
         <div className="glass-panel text-center animate-fade-in" style={{ padding: '4rem 2rem' }}>
-          <Users size={48} style={{ color: 'var(--primary-light)', margin: '0 auto 1rem' }} />
+          <Users size={48} style={{ color: 'var(--text-secondary)', margin: '0 auto 1rem' }} />
           <h3 className="text-2xl font-bold" style={{ marginBottom: '0.5rem' }}>No groups yet</h3>
           <p className="text-secondary" style={{ marginBottom: '1.5rem' }}>
             Create a group to start adding and splitting expenses with friends.

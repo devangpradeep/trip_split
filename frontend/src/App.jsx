@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useSearchParams } from 'react-router-dom';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/react';
 import { AuthProvider } from './contexts/AuthContext';
@@ -11,6 +11,8 @@ import JoinGroup from './pages/JoinGroup';
 import Profile from './pages/Profile';
 import InstallPrompt from './components/InstallPrompt';
 import PhoneSetupModal from './components/PhoneSetupModal';
+import Landing from './pages/Landing';
+import { getAuthReturnPath } from './lib/authRedirect';
 
 // Protected Route Wrapper
 const ProtectedRoute = ({ children }) => {
@@ -24,6 +26,13 @@ const ProtectedRoute = ({ children }) => {
   }
   
   return children;
+};
+
+const AuthEntryRoute = ({ children }) => {
+  const { user } = useAuth();
+  const [searchParams] = useSearchParams();
+
+  return user ? <Navigate to={getAuthReturnPath(searchParams.get('next'))} replace /> : children;
 };
 
 // Main App Router
@@ -42,15 +51,11 @@ const AppRoutes = () => {
     <>
       {needsPhoneSetup && <PhoneSetupModal />}
       <Routes>
-        <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login />} />
-        <Route path="/register" element={user ? <Navigate to="/" replace /> : <Register />} />
+        <Route path="/login" element={<AuthEntryRoute><Login /></AuthEntryRoute>} />
+        <Route path="/register" element={<AuthEntryRoute><Register /></AuthEntryRoute>} />
         <Route path="/join/:token" element={<JoinGroup />} />
         
-        <Route path="/" element={
-          <ProtectedRoute>
-            <Dashboard />
-          </ProtectedRoute>
-        } />
+        <Route path="/" element={user ? <Dashboard /> : <Landing />} />
         
         <Route path="/groups/:id" element={
           <ProtectedRoute>
@@ -66,6 +71,7 @@ const AppRoutes = () => {
         
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      <InstallPrompt enabled={Boolean(user)} />
     </>
   );
 };
@@ -75,7 +81,6 @@ const App = () => {
     <AuthProvider>
       <Router>
         <AppRoutes />
-        <InstallPrompt />
         <Analytics />
         <SpeedInsights />
       </Router>

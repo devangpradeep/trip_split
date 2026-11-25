@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { useNavigate, Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/useAuth';
+import { getAuthReturnPath } from '../lib/authRedirect';
 
 const isValidPhoneNumber = (value) => /^\d{10}$/.test(value.trim());
 const nextPhoneValue = (value, currentValue) => (
@@ -16,11 +17,9 @@ const Register = () => {
   const [loading, setLoading] = useState(false);
   
   const { register } = useAuth();
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const nextParam = searchParams.get('next');
-  const nextPath = nextParam && nextParam.startsWith('/') ? nextParam : '/';
-  const loginLink = nextParam ? `/login?next=${encodeURIComponent(nextParam)}` : '/login';
+  const nextPath = getAuthReturnPath(searchParams.get('next'));
+  const loginLink = nextPath !== '/' ? `/login?next=${encodeURIComponent(nextPath)}` : '/login';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -42,9 +41,7 @@ const Register = () => {
 
     const result = await register(name, email, password, phone.trim());
     
-    if (result.success) {
-      navigate(nextPath);
-    } else {
+    if (!result.success) {
       setError(result.error || 'Failed to register');
       setLoading(false);
     }

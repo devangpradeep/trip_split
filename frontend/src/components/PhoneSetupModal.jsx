@@ -59,8 +59,9 @@ const PhoneSetupModal = () => {
         style={{
           position: 'fixed',
           inset: 0,
-          background: 'rgba(0, 0, 0, 0.65)',
-          backdropFilter: 'blur(6px)',
+          background: 'var(--overlay)',
+          WebkitBackdropFilter: 'var(--blur-overlay)',
+          backdropFilter: 'var(--blur-overlay)',
           zIndex: 9998,
         }}
       />
@@ -81,7 +82,7 @@ const PhoneSetupModal = () => {
         }}
       >
         <div
-          className="glass-panel animate-fade-in"
+          className="glass-panel animate-fade-in modal-card"
           style={{
             width: '100%',
             maxWidth: '440px',
@@ -94,15 +95,15 @@ const PhoneSetupModal = () => {
               width: '64px',
               height: '64px',
               borderRadius: '50%',
-              background: 'linear-gradient(135deg, var(--primary-color), var(--secondary-color, #a78bfa))',
+              background: 'var(--control-wash), var(--primary-light)',
+              boxShadow: 'var(--shadow-selection)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               margin: '0 auto 1.5rem',
-              boxShadow: '0 0 24px rgba(99, 102, 241, 0.35)',
             }}
           >
-            <Phone size={28} color="#fff" />
+            <Phone size={28} color="var(--primary-color)" />
           </div>
 
           <div className="text-center" style={{ marginBottom: '1.75rem' }}>

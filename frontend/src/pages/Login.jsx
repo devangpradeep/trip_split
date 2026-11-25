@@ -1,6 +1,7 @@
 import { useState } from 'react';
-import { useNavigate, Link, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../contexts/useAuth';
+import { getAuthReturnPath } from '../lib/authRedirect';
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -9,11 +10,9 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   
   const { login } = useAuth();
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const nextParam = searchParams.get('next');
-  const nextPath = nextParam && nextParam.startsWith('/') ? nextParam : '/';
-  const registerLink = nextParam ? `/register?next=${encodeURIComponent(nextParam)}` : '/register';
+  const nextPath = getAuthReturnPath(searchParams.get('next'));
+  const registerLink = nextPath !== '/' ? `/register?next=${encodeURIComponent(nextPath)}` : '/register';
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -22,9 +21,7 @@ const Login = () => {
 
     const result = await login(email, password);
     
-    if (result.success) {
-      navigate(nextPath);
-    } else {
+    if (!result.success) {
       setError(result.error || 'Failed to login');
       setLoading(false);
     }
