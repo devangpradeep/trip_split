@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/useAuth';
 import api, { groupMembersApi, groupsApi } from '../lib/api';
@@ -58,20 +58,25 @@ const DashboardCustomSelect = ({ value, options, onChange, disabled = false }) =
 
   useEffect(() => {
     const handleEscape = (event) => {
-      if (event.key === 'Escape') {
+      if (open && event.key === 'Escape') {
+        event.preventDefault();
         setOpen(false);
+        rootRef.current?.querySelector('button')?.focus();
       }
     };
 
     document.addEventListener('keydown', handleEscape);
     return () => document.removeEventListener('keydown', handleEscape);
-  }, []);
+  }, [open]);
 
   return (
     <div ref={rootRef} className={`custom-select ${open ? 'open' : ''}`}>
       <button
         type="button"
+        id="new-group-currency"
         className="custom-select-trigger"
+        aria-label={`Currency, ${selectedOption?.label || 'Select'}`}
+        aria-expanded={open}
         onClick={() => {
           if (disabled) return;
           setOpen((prev) => !prev);
@@ -114,6 +119,8 @@ const Dashboard = () => {
   const [friendCandidatesLoaded, setFriendCandidatesLoaded] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showAddGroup, setShowAddGroup] = useState(false);
+  const createGroupDialogRef = useRef(null);
+  const newGroupButtonRef = useRef(null);
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupDescription, setNewGroupDescription] = useState('');
   const [newGroupCurrency, setNewGroupCurrency] = useState('INR');
@@ -151,6 +158,16 @@ const Dashboard = () => {
   useEffect(() => {
     fetchGroups();
   }, [fetchGroups]);
+
+  useLayoutEffect(() => {
+    if (!showAddGroup) return;
+
+    const dialog = createGroupDialogRef.current;
+    // Keep the software keyboard closed until the user taps a field.
+    dialog.querySelector('#create-group-title').autofocus = true;
+    dialog.showModal();
+    return () => dialog.close();
+  }, [showAddGroup]);
 
   useEffect(() => {
     if (!showAddGroup || friendCandidatesLoaded) return;
@@ -224,6 +241,30 @@ const Dashboard = () => {
     { id: null, name: '', email: trimmedQuery.toLowerCase() }
   ) : null;
 
+  const openCreateGroup = (event) => {
+    event.currentTarget.focus({ preventScroll: true });
+    setCreateGroupError('');
+    setShowAddGroup(true);
+  };
+
+  const dismissCreateGroup = () => {
+    createGroupDialogRef.current?.close();
+    if (document.activeElement === document.body) {
+      newGroupButtonRef.current?.focus({ preventScroll: true });
+    }
+    setShowAddGroup(false);
+  };
+
+  const closeCreateGroup = () => {
+    if (groupCreationInFlightRef.current) return;
+    dismissCreateGroup();
+    setGroupNameError('');
+    setCreateGroupError('');
+    setNewGroupDescription('');
+    setNewGroupFriendQuery('');
+    setSelectedNewGroupFriends([]);
+  };
+
   const handleCreateGroup = async (e) => {
     e.preventDefault();
     if (groupCreationInFlightRef.current) return;
@@ -231,6 +272,7 @@ const Dashboard = () => {
     const groupName = newGroupName.trim();
     if (!groupName) {
       setGroupNameError('Group name is required');
+      e.currentTarget.elements.namedItem('new-group-name')?.focus();
       return;
     }
 
@@ -286,7 +328,7 @@ const Dashboard = () => {
       setNewGroupDescription('');
       setNewGroupFriendQuery('');
       setSelectedNewGroupFriends([]);
-      setShowAddGroup(false);
+      dismissCreateGroup();
     } catch (error) {
       console.error('Failed to create group', error);
       const serverError = error.response?.data?.errors?.join(', ') || error.response?.data?.error;
@@ -441,9 +483,12 @@ const Dashboard = () => {
       {/* Main Content */}
       <div className="dashboard-toolbar" style={{ marginBottom: '1rem' }}>
         <h2 className="text-2xl font-bold">Your Groups</h2>
-        <button 
+        <button
+          ref={newGroupButtonRef}
+          type="button"
           className="btn btn-primary"
-          onClick={() => setShowAddGroup(!showAddGroup)}
+          aria-haspopup="dialog"
+          onClick={openCreateGroup}
         >
           <Plus size={18} /> New Group
         </button>
@@ -477,20 +522,33 @@ const Dashboard = () => {
       )}
 
       {showAddGroup && (
-        <div className="glass-panel animate-fade-in" style={{ marginBottom: '2rem' }}>
-          <h3 style={{ marginBottom: '1rem', fontSize: '1.2rem' }}>Create New Group</h3>
+        <dialog
+          ref={createGroupDialogRef}
+          className="glass-panel animate-fade-in modal-card form-modal-card create-group-dialog"
+          aria-labelledby="create-group-title"
+          onCancel={(event) => {
+            event.preventDefault();
+            closeCreateGroup();
+          }}
+        >
+          <div className="form-modal-header">
+            <h3 id="create-group-title" className="form-modal-title" tabIndex={-1}>Create New Group</h3>
+          </div>
+          <div className="form-modal-divider" />
           <form
             onSubmit={handleCreateGroup}
             autoComplete="off"
             data-lpignore="true"
             data-form-type="other"
-            className="create-group-form"
+            className="form-modal-body create-group-form"
           >
-            <div className="form-group create-group-name-field" style={{ margin: 0 }}>
-              <input 
+            <div className="form-group">
+              <label htmlFor="new-group-name">Group name</label>
+              <input
+                id="new-group-name"
                 type="text"
                 required
-                placeholder="Group Name (e.g., Goa Trip)" 
+                placeholder="e.g., Goa Trip"
                 value={newGroupName}
                 onChange={(e) => {
                   setNewGroupName(e.target.value);
@@ -499,10 +557,10 @@ const Dashboard = () => {
                 onInvalid={(e) => {
                   e.preventDefault();
                   setGroupNameError('Group name is required');
+                  e.currentTarget.focus();
                 }}
                 aria-invalid={Boolean(groupNameError)}
                 aria-describedby={groupNameError ? 'create-group-name-error' : undefined}
-                autoFocus
               />
               {groupNameError && (
                 <div id="create-group-name-error" className="error-text create-group-name-error">
@@ -510,33 +568,36 @@ const Dashboard = () => {
                 </div>
               )}
             </div>
-            <div className="form-group create-group-currency-field" style={{ margin: 0 }}>
+            <div className="form-group">
+              <label htmlFor="new-group-currency">Currency</label>
               <DashboardCustomSelect
                 value={newGroupCurrency} 
                 options={currencyOptions}
                 onChange={setNewGroupCurrency}
               />
             </div>
-            <div className="form-group create-group-description-field" style={{ margin: 0 }}>
-              <label>
+            <div className="form-group create-group-description-field">
+              <label htmlFor="new-group-description">
                 Description <span className="field-optional">Optional</span>
               </label>
               <textarea
+                id="new-group-description"
                 rows={2}
                 placeholder="e.g., Weekend trip plans"
                 value={newGroupDescription}
                 onChange={(e) => setNewGroupDescription(e.target.value)}
               />
             </div>
-            <div className="form-group create-group-friends-field" style={{ margin: 0 }}>
-              <label style={{ marginBottom: '0.35rem' }}>Add friends <span className="field-optional">Optional — name or email</span></label>
+            <div className="form-group create-group-friends-field">
+              <label htmlFor="new-group-friend-lookup">Add friends <span className="field-optional">Optional</span></label>
               <input
+                id="new-group-friend-lookup"
                 type="search"
                 name="create_group_friend_lookup"
                 value={newGroupFriendQuery}
                 onChange={(e) => setNewGroupFriendQuery(e.target.value)}
                 disabled={creatingGroup}
-                placeholder="Search by name or enter any email address"
+                placeholder="Search by name or email"
                 autoComplete="new-password"
                 autoCorrect="off"
                 autoCapitalize="none"
@@ -600,7 +661,7 @@ const Dashboard = () => {
               </div>
             )}
             {selectedNewGroupFriends.filter((friend) => !friend.id).map((friend) => (
-              <div key={friend.email} className="form-group create-group-guest-name-field" style={{ margin: 0 }}>
+              <div key={friend.email} className="form-group create-group-guest-name-field">
                 <label htmlFor={`new-group-friend-name-${friend.email}`}>
                   Display name for {friend.email}
                 </label>
@@ -620,32 +681,27 @@ const Dashboard = () => {
                 />
               </div>
             ))}
-            <div className="create-group-actions">
-              <button type="submit" className="btn btn-primary create-group-submit-btn" disabled={creatingGroup}>
+            {createGroupError && (
+              <div role="alert" className="error-text create-group-error-text">{createGroupError}</div>
+            )}
+            <div className="form-modal-actions create-group-actions">
+              <button type="submit" className="btn btn-primary" disabled={creatingGroup}>
                 {creatingGroup ? 'Creating...' : 'Create'}
               </button>
               <button
                 type="button"
-                className="btn btn-secondary create-group-cancel-btn"
-                onClick={() => {
-                  if (creatingGroup) return;
-                  setShowAddGroup(false);
-                  setGroupNameError('');
-                  setCreateGroupError('');
-                  setNewGroupDescription('');
-                  setNewGroupFriendQuery('');
-                  setSelectedNewGroupFriends([]);
-                }}
+                className="btn btn-ghost"
+                onClick={closeCreateGroup}
                 disabled={creatingGroup}
               >
                 Cancel
               </button>
             </div>
           </form>
-        </div>
+        </dialog>
       )}
 
-      {createGroupError && (
+      {!showAddGroup && createGroupError && (
         <div role="alert" className="error-text create-group-error-text">{createGroupError}</div>
       )}
 
@@ -660,9 +716,11 @@ const Dashboard = () => {
           <p className="text-secondary" style={{ marginBottom: '1.5rem' }}>
             Create a group to start adding and splitting expenses with friends.
           </p>
-          <button 
+          <button
+            type="button"
             className="btn btn-primary"
-            onClick={() => setShowAddGroup(true)}
+            aria-haspopup="dialog"
+            onClick={openCreateGroup}
           >
             <Plus size={18} /> Create your first group
           </button>
